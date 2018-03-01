@@ -26,7 +26,9 @@ import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 
+import org.openkilda.LinksUtils;
 import org.openkilda.flow.FlowUtils;
+import org.openkilda.messaging.info.event.IslInfoData;
 import org.openkilda.messaging.model.Flow;
 import org.openkilda.messaging.payload.flow.FlowEndpointPayload;
 import org.openkilda.messaging.payload.flow.FlowPayload;
@@ -79,6 +81,37 @@ public class FlowCrudBasicRunTest {
     public void failedFlowCreation(final String flowId, final String sourceSwitch, final int sourcePort,
                                    final int sourceVlan, final String destinationSwitch, final int destinationPort,
                                    final int destinationVlan, final int bandwidth) throws Exception {
+        flowPayload = new FlowPayload(FlowUtils.getFlowName(flowId),
+                new FlowEndpointPayload(sourceSwitch, sourcePort, sourceVlan),
+                new FlowEndpointPayload(destinationSwitch, destinationPort, destinationVlan),
+                bandwidth, false, flowId, null);
+
+        FlowPayload response = FlowUtils.putFlow(flowPayload);
+
+        assertNull(response);
+    }
+
+    @When("^flow (.*) creation request with (.*) and any isl port (\\d+) and (.*) any isl port (\\d+) and (\\d+) is failed$")
+    public void failedFlowCreationWithIslPorts(final String flowId,
+            final String sourceSwitch, final int sourceVlan,
+            final String destinationSwitch, final int destinationVlan,
+            final int bandwidth) {
+
+        int sourcePort = 0;
+        int destinationPort = 0;
+
+        for (IslInfoData link : LinksUtils.dumpLinks()) {
+            if (sourceSwitch.equals(link.getPath().get(0).getSwitchId())) {
+                sourcePort = link.getPath().get(0).getPortNo();
+            }
+            if (destinationSwitch.equals(link.getPath().get(1).getSwitchId())) {
+                destinationPort = link.getPath().get(1).getPortNo();
+            }
+        }
+
+        assertNotEquals("No Isl ports found for source switch", 0, sourcePort);
+        assertNotEquals("No Isl ports found for destination switch", 0, destinationPort);
+
         flowPayload = new FlowPayload(FlowUtils.getFlowName(flowId),
                 new FlowEndpointPayload(sourceSwitch, sourcePort, sourceVlan),
                 new FlowEndpointPayload(destinationSwitch, destinationPort, destinationVlan),

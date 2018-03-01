@@ -44,7 +44,13 @@ import org.openkilda.messaging.error.ErrorType;
 import org.openkilda.messaging.error.MessageException;
 import org.openkilda.messaging.info.InfoMessage;
 import org.openkilda.messaging.info.event.PathInfoData;
-import org.openkilda.messaging.info.flow.*;
+import org.openkilda.messaging.info.flow.FlowCacheSyncResponse;
+import org.openkilda.messaging.info.flow.FlowInfoData;
+import org.openkilda.messaging.info.flow.FlowOperation;
+import org.openkilda.messaging.info.flow.FlowPathResponse;
+import org.openkilda.messaging.info.flow.FlowResponse;
+import org.openkilda.messaging.info.flow.FlowStatusResponse;
+import org.openkilda.messaging.info.flow.FlowsResponse;
 import org.openkilda.messaging.model.Flow;
 import org.openkilda.messaging.model.ImmutablePair;
 import org.openkilda.messaging.payload.flow.FlowCacheSyncResults;
@@ -52,8 +58,9 @@ import org.openkilda.messaging.payload.flow.FlowIdStatusPayload;
 import org.openkilda.messaging.payload.flow.FlowState;
 import org.openkilda.pce.cache.FlowCache;
 import org.openkilda.pce.cache.ResourceCache;
-import org.openkilda.pce.provider.Auth;
+import org.openkilda.pce.provider.FlowConflictException;
 import org.openkilda.pce.provider.FlowInfo;
+import org.openkilda.pce.provider.PathComputerFactory;
 import org.openkilda.pce.provider.PathComputer;
 import org.openkilda.pce.provider.PathComputer.Strategy;
 import org.openkilda.pce.provider.UnroutablePathException;
@@ -69,7 +76,11 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.UUID;
 import java.util.stream.Collectors;
 
 public class CrudBolt
@@ -92,7 +103,7 @@ public class CrudBolt
      * Path computation instance.
      */
     private PathComputer pathComputer;
-    private final Auth pathComputerAuth;
+    private final PathComputerFactory pathComputerFactory;
 
     /**
      * Flows state.
@@ -110,10 +121,10 @@ public class CrudBolt
     /**
      * Instance constructor.
      *
-     * @param pathComputerAuth {@link Auth} instance
+     * @param pathComputerFactory {@link PathComputerFactory} instance
      */
-    public CrudBolt(Auth pathComputerAuth) {
-        this.pathComputerAuth = pathComputerAuth;
+    public CrudBolt(PathComputerFactory pathComputerFactory) {
+        this.pathComputerFactory = pathComputerFactory;
     }
 
     /**
@@ -155,7 +166,7 @@ public class CrudBolt
         this.context = topologyContext;
         this.outputCollector = outputCollector;
 
-        pathComputer = pathComputerAuth.connect();
+        pathComputer = pathComputerFactory.getPathComputer();
     }
 
     /**
@@ -459,10 +470,17 @@ public class CrudBolt
             case UPDATE:
                 flow = flowCache.getFlow(flowId);
 
+                ImmutablePair<PathInfoData, PathInfoData> path;
                 try {
-                    ImmutablePair<PathInfoData, PathInfoData> path =
-                            pathComputer.getPath(flow.getLeft(), Strategy.COST);
+                    path = pathComputer.getPath(flow.getLeft(), Strategy.COST);
                     logger.info("Rerouted flow path: {}", path);
+                } catch (UnroutablePathException e) {
+                    flow.getLeft().setState(FlowState.DOWN);
+                    flow.getRight().setState(FlowState.DOWN);
+                    throw new MessageException(message.getCorrelationId(), System.currentTimeMillis(),
+                            ErrorType.UPDATE_FAILURE, "Could not reroute flow", "Path was not found");
+                }
+
                     //no need to emit changes if path wasn't changed and flow is active.
                     if (!path.getLeft().equals(flow.getLeft().getFlowPath()) || !isFlowActive(flow)) {
                         flow.getLeft().setState(FlowState.DOWN);
@@ -485,12 +503,6 @@ public class CrudBolt
                     Values response = new Values(new InfoMessage(new FlowPathResponse(flow.left.getFlowPath()),
                             message.getTimestamp(), message.getCorrelationId(), Destination.NORTHBOUND));
                     outputCollector.emit(StreamType.RESPONSE.toString(), tuple, response);
-                } catch (UnroutablePathException e) {
-                    flow.getLeft().setState(FlowState.DOWN);
-                    flow.getRight().setState(FlowState.DOWN);
-                    throw new MessageException(message.getCorrelationId(), System.currentTimeMillis(),
-                            ErrorType.UPDATE_FAILURE, "Could not reroute flow", "Path was not found");
-                }
                 break;
 
             case CREATE:
@@ -516,9 +528,14 @@ public class CrudBolt
     private void handleRestoreRequest(CommandMessage message, Tuple tuple) throws IOException {
         ImmutablePair<Flow, Flow> requestedFlow = ((FlowRestoreRequest) message.getData()).getPayload();
 
+        ImmutablePair<PathInfoData, PathInfoData> path;
         try {
-            ImmutablePair<PathInfoData, PathInfoData> path = pathComputer.getPath(requestedFlow.getLeft(), Strategy.COST);
+            path = pathComputer.getPath(requestedFlow.getLeft(), Strategy.COST);
             logger.info("Restored flow path: {}", path);
+        } catch (UnroutablePathException e) {
+            throw new MessageException(message.getCorrelationId(), System.currentTimeMillis(),
+                    ErrorType.CREATION_FAILURE, "Could not restore flow", "Path was not found");
+        }
 
             ImmutablePair<Flow, Flow> flow;
             if (flowCache.cacheContainsFlow(requestedFlow.getLeft().getFlowId())) {
@@ -532,10 +549,6 @@ public class CrudBolt
                     new FlowInfoData(requestedFlow.getLeft().getFlowId(), flow,
                             FlowOperation.UPDATE, message.getCorrelationId())));
             outputCollector.emit(StreamType.UPDATE.toString(), tuple, topology);
-        } catch (UnroutablePathException e) {
-            throw new MessageException(message.getCorrelationId(), System.currentTimeMillis(),
-                    ErrorType.CREATION_FAILURE, "Could not restore flow", "Path was not found");
-        }
     }
 
     private void handleUpdateRequest(CommandMessage message, Tuple tuple) throws IOException {

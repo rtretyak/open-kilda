@@ -51,6 +51,7 @@ public interface PathComputer extends Serializable {
      * Gets path between source and destination switch.
      *
      * @param flow {@link Flow} instances
+     * @param strategy defines {@link Strategy} how the path is chosen.
      * @return {@link PathInfoData} instances
      */
     ImmutablePair<PathInfoData, PathInfoData> getPath(Flow flow, Strategy strategy) throws UnroutablePathException;

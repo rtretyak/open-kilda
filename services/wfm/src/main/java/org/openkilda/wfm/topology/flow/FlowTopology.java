@@ -17,8 +17,8 @@ package org.openkilda.wfm.topology.flow;
 
 import org.openkilda.messaging.ServiceType;
 import org.openkilda.messaging.Utils;
-import org.openkilda.pce.provider.Auth;
-import org.openkilda.pce.provider.AuthNeo4j;
+import org.openkilda.pce.provider.PathComputerFactory;
+import org.openkilda.pce.provider.neo4j.Neo4jPathComputerFactory;
 import org.openkilda.wfm.ConfigurationException;
 import org.openkilda.wfm.CtrlBoltRef;
 import org.openkilda.wfm.LaunchEnvironment;
@@ -62,11 +62,11 @@ public class FlowTopology extends AbstractTopology {
 
     private static final Logger logger = LoggerFactory.getLogger(FlowTopology.class);
 
-    private final Auth pathComputerAuth;
+    private final PathComputerFactory pathComputerFactory;
 
     public FlowTopology(LaunchEnvironment env) throws ConfigurationException {
         super(env);
-        pathComputerAuth = new AuthNeo4j(config.getNeo4jHost(), config.getNeo4jLogin(), config.getNeo4jPassword());
+        pathComputerFactory = new Neo4jPathComputerFactory(config.getNeo4jHost(), config.getNeo4jLogin(), config.getNeo4jPassword());
 
         logger.debug("Topology built {}: zookeeper={}, kafka={}, parallelism={}, workers={}" +
                 ", neo4j_url{}, neo4j_user{}, neo4j_pswd{}",
@@ -74,9 +74,9 @@ public class FlowTopology extends AbstractTopology {
                 config.getWorkers(), config.getNeo4jHost(), config.getNeo4jLogin(), config.getNeo4jPassword());
     }
 
-    public FlowTopology(LaunchEnvironment env, Auth pathComputerAuth) throws ConfigurationException {
+    public FlowTopology(LaunchEnvironment env, PathComputerFactory pathComputerFactory) throws ConfigurationException {
         super(env);
-        this.pathComputerAuth = pathComputerAuth;
+        this.pathComputerFactory = pathComputerFactory;
 
         logger.debug("Topology built {}: zookeeper={}, kafka={}, parallelism={}, workers={}",
                 getTopologyName(), config.getZookeeperHosts(), config.getKafkaHosts(), config.getParallelism(),
@@ -111,8 +111,8 @@ public class FlowTopology extends AbstractTopology {
          * Bolt handles flow CRUD operations.
          * It groups requests by flow-id.
          */
-        CrudBolt crudBolt = new CrudBolt(pathComputerAuth);
-        ComponentObject.serialized_java(org.apache.storm.utils.Utils.javaSerialize(pathComputerAuth));
+        CrudBolt crudBolt = new CrudBolt(pathComputerFactory);
+        ComponentObject.serialized_java(org.apache.storm.utils.Utils.javaSerialize(pathComputerFactory));
 
         boltSetup = builder.setBolt(ComponentType.CRUD_BOLT.toString(), crudBolt, parallelism)
                 .fieldsGrouping(ComponentType.SPLITTER_BOLT.toString(), StreamType.CREATE.toString(), fieldFlowId)

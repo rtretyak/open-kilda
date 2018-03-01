@@ -89,7 +89,7 @@ public class FlowTopologyTest extends AbstractStormTest {
     public static void setupOnce() throws Exception {
         AbstractStormTest.setupOnce();
 
-        flowTopology = new FlowTopology(makeLaunchEnvironment(), new PathComputerAuth());
+        flowTopology = new FlowTopology(makeLaunchEnvironment(), new PathComputerMockFactory());
         topologyConfig = flowTopology.getConfig();
 
         StormTopology stormTopology = flowTopology.createTopology();

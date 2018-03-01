@@ -1,4 +1,4 @@
-package org.openkilda.pce.provider;
+package org.openkilda.pce.provider.neo4j;
 
 import static junit.framework.TestCase.assertTrue;
 import static org.junit.Assert.assertEquals;
@@ -24,6 +24,10 @@ import org.openkilda.messaging.model.ImmutablePair;
 import org.openkilda.neo.NeoUtils;
 import org.openkilda.neo.OkNode;
 import org.openkilda.neo.NeoUtils.OkRels;
+import org.openkilda.pce.provider.FlowInfo;
+import org.openkilda.pce.provider.PathComputer;
+import org.openkilda.pce.provider.UnroutablePathException;
+import org.openkilda.pce.provider.neo4j.Neo4jPathComputer;
 
 /**
  * The primary goals of this test package are to emulate the Acceptance Tests in the ATDD module.
@@ -100,7 +104,7 @@ public class PathComputerTest {
         }
 
         Driver driver = GraphDatabase.driver( "bolt://localhost:7878", AuthTokens.basic( "neo4j", "password" ) );
-        NeoDriver nd = new NeoDriver(driver);
+        Neo4jPathComputer nd = new Neo4jPathComputer(driver);
         List<FlowInfo> fi = nd.getFlowInfo();
         Assert.assertEquals(fi.get(0).getFlowId(), "f1");
         Assert.assertEquals(fi.get(0).getCookie(), 3);
@@ -159,7 +163,7 @@ public class PathComputerTest {
          */
         createDiamond("active", 10, 20);
         Driver driver = GraphDatabase.driver( "bolt://localhost:7878", AuthTokens.basic( "neo4j", "password" ) );
-        NeoDriver nd = new NeoDriver(driver);
+        Neo4jPathComputer nd = new Neo4jPathComputer(driver);
         Flow f = new Flow();
         f.setSourceSwitch("00:01");
         f.setDestinationSwitch("00:04");
@@ -179,7 +183,7 @@ public class PathComputerTest {
          */
         createDiamond("inactive", 10, 20);
         Driver driver = GraphDatabase.driver( "bolt://localhost:7878", AuthTokens.basic( "neo4j", "password" ) );
-        NeoDriver nd = new NeoDriver(driver);
+        Neo4jPathComputer nd = new Neo4jPathComputer(driver);
         Flow f = new Flow();
         f.setSourceSwitch("00:01");
         f.setDestinationSwitch("00:04");
@@ -199,7 +203,7 @@ public class PathComputerTest {
          */
         createDiamond("active", -1, 2000);
         Driver driver = GraphDatabase.driver( "bolt://localhost:7878", AuthTokens.basic( "neo4j", "password" ) );
-        NeoDriver nd = new NeoDriver(driver);
+        Neo4jPathComputer nd = new Neo4jPathComputer(driver);
         Flow f = new Flow();
         f.setSourceSwitch("00:01");
         f.setDestinationSwitch("00:04");

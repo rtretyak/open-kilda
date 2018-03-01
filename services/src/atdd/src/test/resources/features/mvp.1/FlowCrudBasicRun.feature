@@ -184,7 +184,7 @@ Feature: Basic Flow CRUD
 
 
   @MVP1.1 @CRUD_NEGATIVE
-  Scenario Outline: Flow Creation Negative Scenario for Vlan Conflicts
+  Scenario Outline: Flow Creation Negative Scenario for Vlan conflicts
 
   This scenario setups flow across the entire set of switches and checks that no new flow with conflicting vlan could be installed
 
@@ -206,3 +206,23 @@ Feature: Basic Flow CRUD
       | vs2swap1 | de:ad:be:ef:00:00:00:03 |      1      |     100     | de:ad:be:ef:00:00:00:04 |         2        |       200        |   10000   |
       | vs2swap2 | de:ad:be:ef:00:00:00:03 |      1      |     200     | de:ad:be:ef:00:00:00:04 |         2        |       100        |   10000   |
       | vs2swap3 | de:ad:be:ef:00:00:00:03 |      1      |     200     | de:ad:be:ef:00:00:00:04 |         2        |       200        |   10000   |
+
+  @MVP1.1 @CRUD_NEGATIVE
+  Scenario Outline: Flow Creation Negative Scenario for Isl conflicts
+
+  Validates that a flow with ports conflicting with Isl ports could not be installed
+
+    Given a clean controller
+    And a nonrandom linear topology of 7 switches
+    And topology contains 12 links
+    And a clean flow topology
+    When flow <flow_id>_conflict creation request with <source_switch> and any isl port <source_vlan> and <destination_switch> any isl port <destination_vlan> and 10000 is failed
+
+    Examples:
+      | flow_id  |      source_switch      | source_vlan |   destination_switch    | destination_vlan |
+      |    ic1   | de:ad:be:ef:00:00:00:01 |      0      | de:ad:be:ef:00:00:00:01 |        0         |
+      |    ic2   | de:ad:be:ef:00:00:00:01 |      0      | de:ad:be:ef:00:00:00:02 |        0         |
+      |    ic3   | de:ad:be:ef:00:00:00:01 |      0      | de:ad:be:ef:00:00:00:02 |        1         |
+      |    ic4   | de:ad:be:ef:00:00:00:01 |      1      | de:ad:be:ef:00:00:00:02 |        1         |
+      |    ic5   | de:ad:be:ef:00:00:00:01 |      1      | de:ad:be:ef:00:00:00:02 |        2         |
+      |    ic6   | de:ad:be:ef:00:00:00:01 |      0      | de:ad:be:ef:00:00:00:07 |        0         |
