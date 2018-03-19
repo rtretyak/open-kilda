@@ -14,21 +14,23 @@
 #   limitations under the License.
 #
 
-import json
 import logging
 import threading
 
 from py2neo import Node
-from topologylistener import model
+from py2neo.database import status as neo4j_errors
 
-from topologylistener import config
+from topologylistener import model
 from topologylistener import db
 from topologylistener import exc
 from topologylistener import isl_utils
-import flow_utils
-import message_utils
+from topologylistener import config
+from topologylistener import exc
+from topologylistener import flow_utils
+from topologylistener import message_utils
 
 logger = logging.getLogger(__name__)
+
 graph = flow_utils.graph
 switch_states = {
     'active': 'ACTIVATED',
@@ -125,92 +127,84 @@ read_config()
 
 
 class MessageItem(model.JsonSerializable):
-    def __init__(self, **kwargs):
-        self.type = kwargs.get("clazz")
+    def __init__(self, message):
+        self.message = message
+
         self.timestamp = model.TimeProperty.new_from_java_timestamp(
                 kwargs.get("timestamp"))
-        self.payload = kwargs.get("payload", {})
-        self.destination = kwargs.get("destination","")
-        self.correlation_id = kwargs.get("correlation_id", "admin-request")
+        self.payload = self.message["payload"]
+        self.kind = self.payload["clazz"]
         self.reply_to = kwargs.get("reply_to", "")
 
-    def get_type(self):
-        message_type = self.get_message_type()
-        command = self.get_command()
-        return command if message_type == 'unknown' else message_type
-
-    def get_command(self):
-        return self.payload.get('clazz', 'unknown')
-
-    def get_message_type(self):
-        return self.payload.get('clazz', 'unknown')
+        self.correlation_id = self.message.get("correlation_id", "admin-request")
 
     def handle(self):
-        try:
-            event_handled = False
+        if self.kind == MT_SWITCH:
+            if self.payload['state'] == "ADDED":
+                self.create_switch()
+            elif self.payload['state'] == "ACTIVATED":
+                self.activate_switch()
+            elif self.payload['state']in ("DEACTIVATED", "REMOVED"):
+                self.switch_unplug()
+            else:
+                raise exc.NoHandlerError
+            event_handled = True
 
-            if self.get_message_type() == MT_SWITCH:
-                if self.payload['state'] == "ADDED":
-                    self.create_switch()
-                elif self.payload['state'] == "ACTIVATED":
-                    self.activate_switch()
-                elif self.payload['state'] in ("DEACTIVATED", "REMOVED"):
-                    self.switch_unplug()
-                event_handled = True
+        elif self.kind == MT_ISL:
+            if self.payload['state'] == "DISCOVERED":
+                self.create_isl()
+            elif self.payload['state'] in ("FAILED", "MOVED"):
+                self.isl_discovery_failed()
+            else:
+                raise exc.NoHandlerError
+            event_handled = True
 
-            elif self.get_message_type() == MT_ISL:
-                if self.payload['state'] == "DISCOVERED":
-                    self.create_isl()
-                elif self.payload['state'] in ("FAILED", "MOVED"):
-                    self.isl_discovery_failed()
-                event_handled = True
+        elif self.kind == MT_PORT:
+            if self.payload['state'] == "DOWN":
+                self.port_down()
+            event_handled = True
 
-            elif self.get_message_type() == MT_PORT:
-                if self.payload['state'] == "DOWN":
-                    self.port_down()
-                event_handled = True
+        elif self.kind == MT_FLOW_INFODATA:
+            event_handled = self.flow_operation()
 
-            # Cache topology expects to receive OFE events
-            if event_handled:
-                message_utils.send_cache_message(self.payload,
-                                                 self.correlation_id)
-                self.handle_topology_change()
+#            elif self.get_command() == CD_FLOWS_SYNC_REQUEST:
+#                self.handle_flow_topology_sync()
+#                event_handled = True
+#
+#            elif self.get_message_type() == MT_STATE_TOGGLE:
+#                event_handled = self.get_feature_toggle_state()
+#            elif self.get_message_type() == MT_TOGGLE:
+#                event_handled = self.update_feature_toggles()
+#
+#            elif self.get_message_type() == MT_SWITCH_EXTENDED:
+#                if features_status[FEATURE_SYNC_OFRULES]:
+#                    event_handled = self.validate_and_sync_switch_rules()
+#                else:
+#                    event_handled = True
+#
+#            elif self.get_message_type() == MT_VALID_REQUEST:
+#                event_handled = self.send_dump_rules_request()
+#
+#            elif self.get_message_type() == MT_SWITCH_RULES:
+#                event_handled = self.validate_switch_rules()
+#
+#            elif self.get_message_type() == MT_SYNC_REQUEST:
+#                event_handled = self.sync_switch_rules()
+#        elif self.kind == CD_NETWORK:
+#            event_handled = self.dump_network()
 
-            elif self.get_message_type() == MT_FLOW_INFODATA:
-                event_handled = self.flow_operation()
+        else:
+            raise exc.NoHandlerError
 
-            elif self.get_command() == CD_FLOWS_SYNC_REQUEST:
-                self.handle_flow_topology_sync()
-                event_handled = True
+        # FIXME(surabujin): in most cases this suggestion is incorrect.
+        if not event_handled:
+            raise exc.RecoverableError
 
-            elif self.get_message_type() == MT_STATE_TOGGLE:
-                event_handled = self.get_feature_toggle_state()
-            elif self.get_message_type() == MT_TOGGLE:
-                event_handled = self.update_feature_toggles()
-
-            elif self.get_message_type() == MT_SWITCH_EXTENDED:
-                if features_status[FEATURE_SYNC_OFRULES]:
-                    event_handled = self.validate_and_sync_switch_rules()
-                else:
-                    event_handled = True
-
-            elif self.get_message_type() == MT_VALID_REQUEST:
-                event_handled = self.send_dump_rules_request()
-
-            elif self.get_message_type() == MT_SWITCH_RULES:
-                event_handled = self.validate_switch_rules()
-
-            elif self.get_message_type() == MT_SYNC_REQUEST:
-                event_handled = self.sync_switch_rules()
-
-            if not event_handled:
-                logger.error('Message was not handled correctly: message=%s',
-                             self.payload)
-
-            return event_handled
-        except Exception as e:
-            logger.exception("Exception during handling message")
-            return False
+        # Cache topology expects to receive OFE events
+        if self.kind in {MT_SWITCH, MT_SWITCH, MT_PORT}:
+            message_utils.send_cache_message(self.payload,
+                                             self.correlation_id)
+            self.handle_topology_change()
 
     def activate_switch(self):
         switch_id = self.payload['switch_id']
@@ -265,7 +259,7 @@ class MessageItem(model.JsonSerializable):
 
     def isl_discovery_failed(self):
         """
-        :return: Ideally, this should return true IFF discovery is deleted or deactivated.
+        :return: Ideally, this should return true IF discovery is deleted or deactivated.
         """
         path = self.payload['path']
         switch_id = path[0]['switch_id']
@@ -397,6 +391,7 @@ class MessageItem(model.JsonSerializable):
         message_utils.send_cache_message(
                 payload, self.correlation_id)
 
+    # TODO(surabujin): split on 2 method and drop out "propagate" argument
     @staticmethod
     def create_flow(flow_id, flow, correlation_id, tx, propagate=True, from_nb=False):
         """
@@ -404,49 +399,34 @@ class MessageItem(model.JsonSerializable):
         :param from_nb: If true, send response to NORTHBOUND API; otherwise to FLOW_TOPOLOGY
         :return:
         """
+        rules = flow_utils.build_rules(flow)
 
-        try:
-            rules = flow_utils.build_rules(flow)
+        logger.info('Flow rules were built: correlation_id=%s, flow_id=%s',
+                    correlation_id, flow_id)
 
-            logger.info('Flow rules were built: correlation_id=%s, flow_id=%s',
-                        correlation_id, flow_id)
+        flow_utils.store_flow(flow, tx)
 
-            flow_utils.store_flow(flow, tx)
+        logger.info('Flow was stored: correlation_id=%s, flow_id=%s',
+                    correlation_id, flow_id)
 
-            logger.info('Flow was stored: correlation_id=%s, flow_id=%s',
-                        correlation_id, flow_id)
+        if propagate:
+            message_utils.send_install_commands(rules, correlation_id)
+            logger.info('Flow rules INSTALLED: correlation_id=%s, flow_id=%s', correlation_id, flow_id)
 
-            if propagate:
-                message_utils.send_install_commands(rules, correlation_id)
-                logger.info('Flow rules INSTALLED: correlation_id=%s, flow_id=%s', correlation_id, flow_id)
-
-            if not from_nb:
-                message_utils.send_info_message({'payload': flow, 'clazz': MT_FLOW_RESPONSE}, correlation_id)
-            else:
-                # The request is sent from Northbound .. send response back
-                logger.info('Flow rules NOT PROPAGATED: correlation_id=%s, flow_id=%s', correlation_id, flow_id)
-                data = {"payload":{"flowid": flow_id,"status": "UP"},
-                        "clazz": message_utils.MT_INFO_FLOW_STATUS}
-                message_utils.send_to_topic(
+        if not from_nb:
+            message_utils.send_info_message({'payload': flow, 'clazz': MT_FLOW_RESPONSE}, correlation_id)
+        else:
+            # The request is sent from Northbound .. send response back
+            logger.info('Flow rules NOT PROPAGATED: correlation_id=%s, flow_id=%s', correlation_id, flow_id)
+            data = {"payload":{"flowid": flow_id,"status": "UP"},
+                    "clazz": message_utils.MT_INFO_FLOW_STATUS}
+            message_utils.send_to_topic(
                     payload=data,
                     correlation_id=correlation_id,
                     message_type=message_utils.MT_INFO,
                     destination="NORTHBOUND",
                     topic=config.KAFKA_NORTHBOUND_TOPIC
                 )
-
-        except Exception as e:
-            logger.exception('Can not create flow: %s', flow_id)
-            if not from_nb:
-                # Propagate is the normal scenario, so send response back to FLOW
-                message_utils.send_error_message(correlation_id, "CREATION_FAILURE", e.message, flow_id)
-            else:
-                # This means we tried a PUSH, send response back to NORTHBOUND
-                message_utils.send_error_message(correlation_id, "PUSH_FAILURE", e.message, flow_id,
-                    destination="NORTHBOUND", topic=config.KAFKA_NORTHBOUND_TOPIC)
-            raise
-
-        return True
 
     @staticmethod
     def delete_flow(flow_id, flow, correlation_id, parent_tx=None, propagate=True, from_nb=False):
@@ -459,96 +439,75 @@ class MessageItem(model.JsonSerializable):
         # TODO: Add state to flow .. ie "DELETING", as part of refactoring project to add state
         - eg: flow_utils.update_state(flow, DELETING, parent_tx)
 
-        :param parent_tx: If there is a larger transaction to use, then use it.
+        All flows .. single switch or multi .. will start with deleting based
+        on the src and flow cookie; then we'll have a delete per segment based
+        on the destination. Consequently, the "single switch flow" is
+        automatically addressed using this algorithm.
+
+        :param tx: py2neo transaction that cover whole flow operation
         :return: True, unless an exception is raised.
         """
-        try:
-            # All flows .. single switch or multi .. will start with deleting based on the src and flow cookie; then
-            # we'll have a delete per segment based on the destination. Consequently, the "single switch flow" is
-            # automatically addressed using this algorithm.
-            flow_cookie = int(flow['cookie'])
-            transit_vlan = int(flow['transit_vlan'])
+        # All flows .. single switch or multi .. will start with deleting based on the src and flow cookie; then
+        # we'll have a delete per segment based on the destination. Consequently, the "single switch flow" is
+        # automatically addressed using this algorithm.
+        flow_cookie = int(flow['cookie'])
+        transit_vlan = int(flow['transit_vlan'])
 
-            current_node = {'switch_id': flow['src_switch'], 'flow_id': flow_id, 'cookie': flow_cookie,
-                       'meter_id': flow['meter_id'], 'in_port': flow['src_port'], 'in_vlan': flow['src_vlan']}
-            nodes = [current_node]
+        current_node = {'switch_id': flow['src_switch'], 'flow_id': flow_id, 'cookie': flow_cookie,
+                   'meter_id': flow['meter_id'], 'in_port': flow['src_port'], 'in_vlan': flow['src_vlan']}
+        nodes = [current_node]
 
-            segments = flow_utils.fetch_flow_segments(flow_id, flow_cookie)
-            for segment in segments:
-                current_node['out_port'] = segment['src_port']
+        segments = flow_utils.fetch_flow_segments(flow_id, flow_cookie)
+        for segment in segments:
+            current_node['out_port'] = segment['src_port']
+            
+            # every segment should have a cookie field, based on merge_segment; but just in case..
+            segment_cookie = segment.get('cookie', flow_cookie)
+            current_node = {'switch_id': segment['dst_switch'], 'flow_id': flow_id, 'cookie': segment_cookie,
+                'meter_id': None, 'in_port': segment['dst_port'], 'in_vlan': transit_vlan,
+                'out_port': segment['dst_port']}
+            nodes.append(current_node)
+        
+        current_node['out_port'] = flow['dst_port']
 
-                # every segment should have a cookie field, based on merge_segment; but just in case..
-                segment_cookie = segment.get('cookie', flow_cookie)
-                current_node = {'switch_id': segment['dst_switch'], 'flow_id': flow_id, 'cookie': segment_cookie,
-                    'meter_id': None, 'in_port': segment['dst_port'], 'in_vlan': transit_vlan,
-                    'out_port': segment['dst_port']}
-                nodes.append(current_node)
+        if propagate:
+            logger.info('Flow rules remove start: correlation_id=%s, flow_id=%s, path=%s', correlation_id, flow_id,
+                        nodes)
+            message_utils.send_delete_commands(nodes, correlation_id)
+            logger.info('Flow rules removed end : correlation_id=%s, flow_id=%s', correlation_id, flow_id)
+        
+        if from_nb:
+            # The request is sent from Northbound .. send response back
+            logger.info('Flow rules NOT PROPAGATED: correlation_id=%s, flow_id=%s', correlation_id, flow_id)
+            data = {"payload":{"flowid": flow_id,"status": "DOWN"},
+                    "clazz": message_utils.MT_INFO_FLOW_STATUS}
+            message_utils.send_to_topic(
+                payload=data,
+                correlation_id=correlation_id,
+                message_type=message_utils.MT_INFO,
+                destination="NORTHBOUND",
+                topic=config.KAFKA_NORTHBOUND_TOPIC
+            )
 
-            current_node['out_port'] = flow['dst_port']
+        flow_utils.remove_flow(flow, tx)
 
-            if propagate:
-                logger.info('Flow rules remove start: correlation_id=%s, flow_id=%s, path=%s', correlation_id, flow_id,
-                            nodes)
-                message_utils.send_delete_commands(nodes, correlation_id)
-                logger.info('Flow rules removed end : correlation_id=%s, flow_id=%s', correlation_id, flow_id)
-
-            if from_nb:
-                # The request is sent from Northbound .. send response back
-                logger.info('Flow rules from NB: correlation_id=%s, flow_id=%s', correlation_id, flow_id)
-                data = {"payload":{"flowid": flow_id,"status": "DOWN"},
-                        "clazz": message_utils.MT_INFO_FLOW_STATUS}
-                message_utils.send_to_topic(
-                    payload=data,
-                    correlation_id=correlation_id,
-                    message_type=message_utils.MT_INFO,
-                    destination="NORTHBOUND",
-                    topic=config.KAFKA_NORTHBOUND_TOPIC
-                )
-
-            flow_utils.remove_flow(flow, parent_tx)
-
-            logger.info('Flow was removed: correlation_id=%s, flow_id=%s', correlation_id, flow_id)
-
-        except Exception as e:
-            logger.exception('Can not delete flow: %s', e.message)
-            if not from_nb:
-                # Propagate is the normal scenario, so send response back to FLOW
-                message_utils.send_error_message(correlation_id, "DELETION_FAILURE", e.message, flow_id)
-            else:
-                # This means we tried a UNPUSH, send response back to NORTHBOUND
-                message_utils.send_error_message( correlation_id, "UNPUSH_FAILURE", e.message, flow_id,
-                    destination="NORTHBOUND", topic=config.KAFKA_NORTHBOUND_TOPIC)
-            raise
-
-        return True
+        logger.info('Flow was removed: correlation_id=%s, flow_id=%s', correlation_id, flow_id)
 
     @staticmethod
     def update_flow(flow_id, flow, correlation_id, tx):
-        try:
-            old_flow = flow_utils.get_old_flow(flow)
+        old_flow = flow_utils.get_old_flow(flow)
 
-            #
-            # Start the transaction to govern the create/delete
-            #
-            logger.info('Flow rules were built: correlation_id=%s, flow_id=%s', correlation_id, flow_id)
-            rules = flow_utils.build_rules(flow)
-            # TODO: add tx to store_flow
-            flow_utils.store_flow(flow, tx)
-            logger.info('Flow was stored: correlation_id=%s, flow_id=%s', correlation_id, flow_id)
-            message_utils.send_install_commands(rules, correlation_id)
+        logger.info('Flow rules were built: correlation_id=%s, flow_id=%s', correlation_id, flow_id)
+        rules = flow_utils.build_rules(flow)
+        # TODO: add tx to store_flow
+        flow_utils.store_flow(flow, tx)
+        logger.info('Flow was stored: correlation_id=%s, flow_id=%s', correlation_id, flow_id)
+        message_utils.send_install_commands(rules, correlation_id)
 
-            MessageItem.delete_flow(old_flow['flowid'], old_flow, correlation_id, tx)
+        MessageItem.delete_flow(old_flow['flowid'], old_flow, correlation_id, tx)
 
-            payload = {'payload': flow, 'clazz': MT_FLOW_RESPONSE}
-            message_utils.send_info_message(payload, correlation_id)
-
-        except Exception as e:
-            logger.exception('Can not update flow: %s', e.message)
-            message_utils.send_error_message(
-                correlation_id, "UPDATE_FAILURE", e.message, flow_id)
-            raise
-
-        return True
+        payload = {'payload': flow, 'clazz': MT_FLOW_RESPONSE}
+        message_utils.send_info_message(payload, correlation_id)
 
     def not_allow_flow_operation(self):
         op = self.payload['operation'].upper()
@@ -585,14 +544,14 @@ class MessageItem(model.JsonSerializable):
         reverse = flows['reverse']
         flow_id = forward['flowid']
 
+        OP = operation.upper()
         if self.not_allow_flow_operation():
             logger.info('Flow %s request is not allow: '
                     'timestamp=%s, correlation_id=%s, payload=%s',
                     operation, timestamp, correlation_id, payload)
 
             # TODO: We really should use the reply-to field, at least in NB, so that we know to send the response.
-            op = payload['operation'].upper()
-            if op == "PUSH" or op == "PUSH_PROPAGATE" or op == "UNPUSH" or op == "UNPUSH_PROPAGATE":
+            if OP in ("PUSH", "PUSH_PROPAGATE", "UNPUSH", "UNPUSH_PROPAGATE"):
                 message_utils.send_error_message(
                     correlation_id, 'REQUEST_INVALID', op+"-FAILURE - NOT ALLOWED RIGHT NOW - Toggle the feature to allow this behavior", "",
                     destination="NORTHBOUND", topic=config.KAFKA_NORTHBOUND_TOPIC)
@@ -603,52 +562,62 @@ class MessageItem(model.JsonSerializable):
                     'timestamp=%s, correlation_id=%s, payload=%s',
                     operation, timestamp, correlation_id, payload)
 
-        tx = None
         # flow_sem.acquire(timeout=10)  # wait 10 seconds .. then proceed .. possibly causing some issue.
-        neo4j_update_lock.acquire()
-        try:
-            OP = operation.upper()
-            if OP == "CREATE" or OP == "PUSH" or OP == "PUSH_PROPAGATE":
-                propagate = (OP == "CREATE" or OP == "PUSH_PROPAGATE")
-                from_nb = (OP == "PUSH" or OP == "PUSH_PROPAGATE")
-                tx = graph.begin()
-                self.create_flow(flow_id, forward, correlation_id, tx, propagate, from_nb)
-                self.create_flow(flow_id, reverse, correlation_id, tx, propagate, from_nb)
-                tx.commit()
-                tx = None
+        with neo4j_update_lock, graph.begin() as tx:
+            try:
+                if OP in ("CREATE", "PUSH", "PUSH_PROPAGATE"):
+                    propagate = OP in ("CREATE", "PUSH_PROPAGATE")
+                    from_nb = OP in ("PUSH", "PUSH_PROPAGATE")
 
-            elif OP == "DELETE" or OP == "UNPUSH" or OP == "UNPUSH_PROPAGATE":
-                tx = graph.begin()
-                propagate = (OP == "DELETE" or OP == "UNPUSH_PROPAGATE")
-                from_nb = (OP == "UNPUSH" or OP == "UNPUSH_PROPAGATE")
-                MessageItem.delete_flow(flow_id, forward, correlation_id, tx, propagate, from_nb)
-                MessageItem.delete_flow(flow_id, reverse, correlation_id, tx, propagate, from_nb)
-                if not from_nb:
-                    message_utils.send_info_message({'payload': forward, 'clazz': MT_FLOW_RESPONSE}, correlation_id)
-                    message_utils.send_info_message({'payload': reverse, 'clazz': MT_FLOW_RESPONSE}, correlation_id)
-                tx.commit()
-                tx = None
+                    self.create_flow(flow_id, forward, correlation_id, tx, propagate, from_nb)
+                    self.create_flow(flow_id, reverse, correlation_id, tx, propagate, from_nb)
 
-            elif OP == "UPDATE":
-                tx = graph.begin()
-                MessageItem.update_flow(flow_id, forward, correlation_id, tx)
-                MessageItem.update_flow(flow_id, reverse, correlation_id, tx)
-                tx.commit()
-                tx = None
+                elif OP in ("DELETE", "UNPUSH", "UNPUSH_PROPAGATE"):
+                    propagate = OP in ("DELETE", "UNPUSH_PROPAGATE")
+                    from_nb = OP in ("UNPUSH", "UNPUSH_PROPAGATE")
 
-            else:
-                logger.warn('Flow operation is not supported: '
-                            'operation=%s, timestamp=%s, correlation_id=%s,',
-                            operation, timestamp, correlation_id)
-        except Exception:
-            if tx is not None:
-                tx.rollback()
-            # flow_sem.release()
-            raise
+                    self.delete_flow(flow_id, forward, correlation_id, tx, propagate, from_nb)
+                    self.delete_flow(flow_id, reverse, correlation_id, tx, propagate, from_nb)
 
-        finally:
-            #flow_sem.release()
-            neo4j_update_lock.release()
+                    if not from_nb:
+                        message_utils.send_info_message(
+                                {'payload': forward, 'clazz': MT_FLOW_RESPONSE},
+                                correlation_id)
+                        message_utils.send_info_message(
+                                {'payload': reverse, 'clazz': MT_FLOW_RESPONSE},
+                                correlation_id)
+
+                elif OP == "UPDATE":
+                    self.update_flow(flow_id, forward, correlation_id, tx)
+                    self.update_flow(flow_id, reverse, correlation_id, tx)
+
+                else:
+                    logger.warn('Flow operation is not supported: '
+                                'operation=%s, timestamp=%s, correlation_id=%s,',
+                                operation, timestamp, correlation_id)
+                    raise exc.NoHandlerError
+
+            except neo4j_errors.TransientError as e:
+                raise exc.RecoverableError(e)
+
+            except Exception as e:
+                kind = {
+                    'CREATE': 'CREATION_FAILURE',
+                    'PUSH': 'PUSH_FAILURE',
+                    'DELETE': 'DELETION_FAILURE',
+                    'UNPUSH': 'UNPUSH_FAILURE',
+                    'UPDATE': 'UPDATE_FAILURE',
+                }[operation]
+
+                extra_args = {}
+                if operation in {}:
+                    extra_args['destination'] = 'NORTHBOUND'
+                    extra_args['topic'] = config.KAFKA_NORTHBOUND_TOPIC
+
+                message_utils.send_error_message(
+                        correlation_id, kind, str(e), flow_id, **extra_args)
+
+                raise exc.UnrecoverableError()
 
         logger.info('Flow %s request processed: '
                     'timestamp=%s, correlation_id=%s, payload=%s',

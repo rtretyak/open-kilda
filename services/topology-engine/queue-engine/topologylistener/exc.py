@@ -48,3 +48,53 @@ class DBRecordNotFound(Error):
 
     def __str__(self):
         return 'DB record not found'
+
+
+class InvalidDecodeError(Error):
+    @property
+    def details(self):
+        return self.args[0]
+
+    @property
+    def raw_request(self):
+        return self.args[1]
+
+    def __init__(self, details, raw_request):
+        super().__init__(details, raw_request)
+
+    def __str__(self):
+        return 'Can\'t decode input: {}'.format(self.details)
+
+
+class NoHandlerError(Error):
+    def __str__(self):
+        return 'There is no handler for this request'
+
+
+class RecoverableError(Error):
+    @property
+    def cause(self):
+        return self.args[0]
+
+    def __init__(self, cause=None):
+        super(RecoverableError, self).__init__(cause)
+
+    def __str__(self):
+        msg = 'Recoverable error (operation can be successful in next attempt)'
+        if self.cause:
+            msg += ': {}'.format(self.cause)
+        return msg
+
+
+class UnrecoverableError(Error):
+    """
+    Ugly workaround over retry mechanism. Drop it when all relevant code will
+    use RecoverableError
+    """
+
+    @property
+    def exc_info(self):
+        return self.args[0]
+
+    def __init__(self):
+        super(UnrecoverableError, self).__init__(sys.exc_info())
