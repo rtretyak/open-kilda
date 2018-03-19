@@ -13,9 +13,7 @@
 #   limitations under the License.
 #
 
-import os
 import json
-import db
 import copy
 import calendar
 import time
@@ -24,12 +22,15 @@ import collections
 import message_utils
 import logging
 
+from topologylistener import db
+from topologylistener import message_utils
+
 
 __all__ = ['graph']
 
 
 graph = db.create_p2n_driver()
-logger = logging.getLogger(__name__)
+raw_logger = logging.getLogger(__name__)
 
 default_rules = ['0x8000000000000001', '0x8000000000000002',
                  '0x8000000000000003']
@@ -136,7 +137,7 @@ def build_rules(flow):
     return get_rules(output_action=output_action, **flow)
 
 
-def remove_flow(flow, parent_tx=None):
+def remove_flow(context, flow, parent_tx=None):
     """
     Deletes the flow and its flow segments. Start with flow segments (symmetrical mirror of store_flow).
     Leverage a parent transaction if it exists, otherwise create / close the transaction within this function.
@@ -147,9 +148,9 @@ def remove_flow(flow, parent_tx=None):
     NB: store_flow is used for uni-direction .. whereas flow_id is used both directions .. need cookie to differentiate
     """
 
-    logger.info('Remove flow: %s', flow['flowid'])
+    context.log(raw_logger).info('Remove flow: %s', flow['flowid'])
     tx = parent_tx if parent_tx else graph.begin()
-    delete_flow_segments(flow, tx)
+    delete_flow_segments(context, flow, tx)
     query = "MATCH (:switch)-[f:flow {{ flowid: '{}', cookie: {} }}]->(:switch) DELETE f".format(flow['flowid'], flow['cookie'])
     result = tx.run(query).data()
     if not parent_tx:
@@ -195,7 +196,7 @@ def merge_flow_relationship(flow_data, tx=None):
         graph.run(query.format(**flow_data))
 
 
-def merge_flow_segments(_flow, tx=None):
+def merge_flow_segments(context, _flow, tx=None):
     """
     This function creates each segment relationship in a flow, and then it calls the function to
     update bandwidth. This should always be down when creating/merging flow segments.
@@ -228,7 +229,8 @@ def merge_flow_segments(_flow, tx=None):
     flow_path = get_flow_path(flow)
     flow_cookie = flow['cookie']
     flow['parent_cookie'] = flow_cookie  # primary key of parent is flowid & cookie
-    logger.debug('MERGE Flow Segments : %s [path: %s]', flow['flowid'], flow_path)
+    context.log(raw_logger).debug(
+            'MERGE Flow Segments : %s [path: %s]', flow['flowid'], flow_path)
 
     for i in range(0, len(flow_path), 2):
         src = flow_path[i]
@@ -253,7 +255,7 @@ def merge_flow_segments(_flow, tx=None):
         else:
             graph.run(create_segment_query.format(**flow))
 
-    update_flow_segment_available_bw(flow, tx)
+    update_flow_segment_available_bw(context, flow, tx)
 
 
 def get_flow_path(flow):
@@ -262,15 +264,15 @@ def get_flow_path(flow):
     node. So, make sure we have an even number of them.
     """
     flow_path = flow['flowpath']['path']
-    if len(flow_path) % 2 != 0:
+    if len(flow_path) % 2:
         # The current implementation puts 2 nodes per segment .. throw an error if this changes
-        msg = 'Found un-even number of nodes in the flowpath: {}'.format(flow_path)
-        logger.error(msg)
-        raise ValueError(msg)
+        raise ValueError(
+                'Found un-even number of nodes in the flowpath: '
+                '{}'.format(flow_path))
     return flow_path
 
 
-def delete_flow_segments(flow, tx=None):
+def delete_flow_segments(context, flow, tx=None):
     """
     Whenever adjusting flow segments, always update available bandwidth. Even when creating a flow
     where we might remove anything old and then create the new .. it isn't guaranteed that the
@@ -279,7 +281,9 @@ def delete_flow_segments(flow, tx=None):
     flow_path = get_flow_path(flow)
     flowid = flow['flowid']
     parent_cookie = flow['cookie']
-    logger.debug('DELETE Flow Segments : flowid: %s parent_cookie: 0x%x [path: %s]', flowid, parent_cookie, flow_path)
+    context.log(raw_logger).debug(
+            'DELETE Flow Segments : flowid: %s parent_cookie: 0x%x [path: %s]',
+            flowid, parent_cookie, flow_path)
     delete_segment_query = (
         "MATCH (:switch)-[fs:flow_segment {{ flowid: '{}', parent_cookie: {} }}]->(:switch) DELETE fs"
     )
@@ -287,7 +291,7 @@ def delete_flow_segments(flow, tx=None):
         tx.run(delete_segment_query.format(flowid, parent_cookie))
     else:
         graph.run(delete_segment_query.format(flowid, parent_cookie))
-    update_flow_segment_available_bw(flow, tx)
+    update_flow_segment_available_bw(context, flow, tx)
 
 
 def fetch_flow_segments(flowid, parent_cookie):
@@ -304,18 +308,24 @@ def fetch_flow_segments(flowid, parent_cookie):
     return [dict(x['fs']) for x in result]
 
 
-def update_flow_segment_available_bw(flow, tx=None):
+def update_flow_segment_available_bw(context, flow, tx=None):
     flow_path = get_flow_path(flow)
-    logger.debug('Update ISL Bandwidth from Flow Segments : %s [path: %s]', flow['flowid'], flow_path)
+    context.log(raw_logger).debug(
+            'Update ISL Bandwidth from Flow Segments : %s [path: %s]',
+            flow['flowid'], flow_path)
     # TODO: Preference for transaction around the entire delete
     # TODO: Preference for batch command
     for i in range(0, len(flow_path), 2):
         src = flow_path[i]
         dst = flow_path[i+1]
-        update_isl_bandwidth(src['switch_id'], src['port_no'], dst['switch_id'], dst['port_no'], tx)
+        update_isl_bandwidth(
+                context,
+                src['switch_id'], src['port_no'],
+                dst['switch_id'], dst['port_no'], tx)
 
 
-def update_isl_bandwidth(src_switch, src_port, dst_switch, dst_port, tx=None):
+def update_isl_bandwidth(
+        context, src_switch, src_port, dst_switch, dst_port, tx=None):
     """
     This will update the available_bandwidth for the isl that matches the src/dst information.
     It does this by looking for all flow segments over the ISL, where ignore_bandwidth = false.
@@ -331,7 +341,9 @@ def update_isl_bandwidth(src_switch, src_port, dst_switch, dst_port, tx=None):
         " SET i.available_bandwidth = i.max_bandwidth - used_bandwidth "
     )
 
-    logger.debug('Update ISL Bandwidth from %s:%d --> %s:%d' % (src_switch, src_port, dst_switch, dst_port))
+    context.log(raw_logger).debug(
+            'Update ISL Bandwidth from %s:%d --> %s:%d',
+            src_switch, src_port, dst_switch, dst_port)
     params = {
         'src_switch': src_switch,
         'src_port': src_port,
@@ -345,7 +357,7 @@ def update_isl_bandwidth(src_switch, src_port, dst_switch, dst_port, tx=None):
         graph.run(query)
 
 
-def store_flow(flow, tx=None):
+def store_flow(context, flow, tx=None):
     """
     Create a :flow relationship between the starting and ending switch, as well as
     create :flow_segment relationships between every switch in the path.
@@ -358,10 +370,10 @@ def store_flow(flow, tx=None):
     """
     # TODO: Preference for transaction around the entire set of store operations
 
-    logger.debug('STORE Flow : %s', flow['flowid'])
-    delete_flow_segments(flow, tx)
+    context.log(raw_logger).debug('STORE Flow : %s', flow['flowid'])
+    delete_flow_segments(context, flow, tx)
     merge_flow_relationship(copy.deepcopy(flow), tx)
-    merge_flow_segments(flow, tx)
+    merge_flow_segments(context, flow, tx)
 
 
 def hydrate_flow(one_row):
@@ -378,7 +390,9 @@ def hydrate_flow(one_row):
     return flow
 
 
-def get_old_flow(new_flow):
+def get_old_flow(context, new_flow):
+    log = context.log(raw_logger)
+
     query = (
         "MATCH (a:switch)-[r:flow {{flowid: '{}'}}]->(b:switch) " 
         " WHERE r.cookie <> {} RETURN r "
@@ -388,18 +402,17 @@ def get_old_flow(new_flow):
 
     if not old_flows:
         message = 'Flow {} not found'.format(new_flow['flowid'])
-        logger.error(message)
+        log.error('%s', message)
         # TODO (aovchinnikov): replace with specific exception.
         raise Exception(message)
-    else:
-        logger.info('Flows were found: %s', old_flows)
 
+    log.info('Flows were found: %s', old_flows)
     for data in old_flows:
         old_flow = hydrate_flow(data)
-        logger.info('check cookies: %s ? %s',
-                    new_flow['cookie'], old_flow['cookie'])
+        log.info('check cookies: %s ? %s',
+                 new_flow['cookie'], old_flow['cookie'])
         if is_same_direction(new_flow['cookie'], old_flow['cookie']):
-            logger.info('Flow was found: flow=%s', old_flow)
+            log.info('Flow was found: flow=%s', old_flow)
             return dict(old_flow)
 
     # FIXME(surabujin): use custom exception!!!

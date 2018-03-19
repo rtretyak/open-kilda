@@ -27,7 +27,7 @@ from topologylistener import isl_utils
 from topologylistener import message_utils
 from topologylistener import model
 
-logger = logging.getLogger(__name__)
+raw_logger = logging.getLogger(__name__)
 
 graph = flow_utils.graph
 switch_states = {
@@ -123,16 +123,15 @@ read_config()
 
 
 class MessageItem(model.JsonSerializable):
-    def __init__(self, message):
-        self.message = message
+    def __init__(self, context, raw_request):
+        self.raw_request = raw_request
+        self.context = context
 
         self.timestamp = model.TimeProperty.new_from_java_timestamp(
                 self.message.get("timestamp"))
         self.payload = self.message["payload"]
         self.kind = self.payload["clazz"]
         self.reply_to = self.message.get("reply_to", "")
-
-        self.correlation_id = self.message.get("correlation_id", "admin-request")
 
     def handle(self):
         if self.kind == MT_SWITCH:
@@ -184,15 +183,12 @@ class MessageItem(model.JsonSerializable):
 
         # Cache topology expects to receive OFE events
         if self.kind in {MT_SWITCH, MT_SWITCH, MT_PORT}:
-            message_utils.send_cache_message(self.payload,
-                                             self.correlation_id)
+            message_utils.send_cache_message(self.context, self.payload)
             self.handle_topology_change()
 
     def activate_switch(self):
         switch_id = self.payload['switch_id']
-
-        logger.info('Switch %s activation request: timestamp=%s',
-                    switch_id, self.timestamp)
+        self.log.debug('Switch %s activation request', switch_id)
 
         with graph.begin() as tx:
             flow_utils.precreate_switches(tx, switch_id)
@@ -207,7 +203,6 @@ class MessageItem(model.JsonSerializable):
 
         logger.info('Switch %s creation request: timestamp=%s',
                     switch_id, self.timestamp)
-
         with graph.begin() as tx:
             flow_utils.precreate_switches(tx, switch_id)
 
@@ -271,8 +266,7 @@ class MessageItem(model.JsonSerializable):
         switch_id = self.payload['switch_id']
         port_id = int(self.payload['port_no'])
 
-        logger.info('Port %s_%d deletion request: timestamp=%s',
-                    switch_id, port_id, self.timestamp)
+        self.log.debug('Port %s_%d deletion request', switch_id, port_id)
 
         try:
             with graph.begin() as tx:
@@ -374,8 +368,7 @@ class MessageItem(model.JsonSerializable):
                 payload, self.correlation_id)
 
     # TODO(surabujin): split on 2 method and drop out "propagate" argument
-    @staticmethod
-    def create_flow(flow_id, flow, correlation_id, tx, propagate=True, from_nb=False):
+    def create_flow(self, flow_id, flow, correlation_id, tx, propagate=True, from_nb=False):
         """
         :param propagate: If true, send to switch
         :param from_nb: If true, send response to NORTHBOUND API; otherwise to FLOW_TOPOLOGY
@@ -383,35 +376,30 @@ class MessageItem(model.JsonSerializable):
         """
         rules = flow_utils.build_rules(flow)
 
-        logger.info('Flow rules were built: correlation_id=%s, flow_id=%s',
-                    correlation_id, flow_id)
-
-        flow_utils.store_flow(flow, tx)
-
-        logger.info('Flow was stored: correlation_id=%s, flow_id=%s',
-                    correlation_id, flow_id)
+        self.log.info('Flow rules were built: flow_id=%s', flow_id)
+        flow_utils.store_flow(self.context, flow)
+        self.log.info('Flow was stored: flow_id=%s', flow_id)
 
         if propagate:
-            message_utils.send_install_commands(rules, correlation_id)
-            logger.info('Flow rules INSTALLED: correlation_id=%s, flow_id=%s', correlation_id, flow_id)
+            message_utils.send_install_commands(self.context, rules)
+            self.log.info('Flow rules INSTALLED: flow_id=%s', flow_id)
 
         if not from_nb:
-            message_utils.send_info_message({'payload': flow, 'clazz': MT_FLOW_RESPONSE}, correlation_id)
+            message_utils.send_info_message(
+                    self.context,
+                    {'payload': flow, 'clazz': MT_FLOW_RESPONSE})
         else:
             # The request is sent from Northbound .. send response back
-            logger.info('Flow rules NOT PROPAGATED: correlation_id=%s, flow_id=%s', correlation_id, flow_id)
-            data = {"payload":{"flowid": flow_id,"status": "UP"},
+            self.log.info('Flow rules NOT PROPAGATED: flow_id=%s', flow_id)
+            data = {"payload": {"flowid": flow_id, "status": "UP"},
                     "clazz": message_utils.MT_INFO_FLOW_STATUS}
             message_utils.send_to_topic(
-                    payload=data,
-                    correlation_id=correlation_id,
-                    message_type=message_utils.MT_INFO,
+                    self.context, data, message_utils.MT_INFO,
                     destination="NORTHBOUND",
-                    topic=config.KAFKA_NORTHBOUND_TOPIC
-                )
+                    topic=config.KAFKA_NORTHBOUND_TOPIC)
 
-    @staticmethod
-    def delete_flow(flow_id, flow, correlation_id, tx=None, propagate=True, from_nb=False):
+    # TODO(surabujin): split on 2 method and drop out "propagate" argument
+    def delete_flow(self, flow_id, flow, correlation_id, tx=None, propagate=True, from_nb=False):
         """
         Simple algorithm - delete the stuff in the DB, send delete commands, send a response.
         Complexity - each segment in the path may have a separate cookie, so that information needs to be gathered.
@@ -440,56 +428,48 @@ class MessageItem(model.JsonSerializable):
         nodes = [current_node]
 
         segments = flow_utils.fetch_flow_segments(flow_id, flow_cookie)
-        for segment in segments:
-            current_node['out_port'] = segment['src_port']
-            
-            # every segment should have a cookie field, based on merge_segment; but just in case..
-            segment_cookie = segment.get('cookie', flow_cookie)
-            current_node = {'switch_id': segment['dst_switch'], 'flow_id': flow_id, 'cookie': segment_cookie,
-                'meter_id': None, 'in_port': segment['dst_port'], 'in_vlan': transit_vlan,
-                'out_port': segment['dst_port']}
-            nodes.append(current_node)
-        
-        current_node['out_port'] = flow['dst_port']
-
         if propagate:
-            logger.info('Flow rules remove start: correlation_id=%s, flow_id=%s, path=%s', correlation_id, flow_id,
-                        nodes)
-            message_utils.send_delete_commands(nodes, correlation_id)
-            logger.info('Flow rules removed end : correlation_id=%s, flow_id=%s', correlation_id, flow_id)
-        
+            self.log.info(
+                    'Flow rules remove start: flow_id=%s, path=%s',
+                    flow_id, nodes)
+            message_utils.send_delete_commands(self.context, nodes)
+            self.log.info('Flow rules removed end: flow_id=%s', flow_id)
+
         if from_nb:
             # The request is sent from Northbound .. send response back
-            logger.info('Flow rules NOT PROPAGATED: correlation_id=%s, flow_id=%s', correlation_id, flow_id)
-            data = {"payload":{"flowid": flow_id,"status": "DOWN"},
+            self.log.info(
+                    'Flow rules NOT PROPAGATED: flow_id=%s', flow_id)
+            data = {"payload": {"flowid": flow_id, "status": "DOWN"},
                     "clazz": message_utils.MT_INFO_FLOW_STATUS}
             message_utils.send_to_topic(
-                payload=data,
-                correlation_id=correlation_id,
-                message_type=message_utils.MT_INFO,
-                destination="NORTHBOUND",
-                topic=config.KAFKA_NORTHBOUND_TOPIC
-            )
+                    self.context, data, message_utils.MT_INFO,
+                    destination="NORTHBOUND",
+                    topic=config.KAFKA_NORTHBOUND_TOPIC)
 
-        flow_utils.remove_flow(flow, tx)
+        flow_utils.remove_flow(self.context, flow, parent_tx)
 
-        logger.info('Flow was removed: correlation_id=%s, flow_id=%s', correlation_id, flow_id)
+        self.log.info('Flow was removed: flow_id=%s', flow_id)
 
-    @staticmethod
-    def update_flow(flow_id, flow, correlation_id, tx):
-        old_flow = flow_utils.get_old_flow(flow)
+    def update_flow(self, flow_id, flow, tx):
+        self.log.debug('Fetch flow info from DB')
+        old_flow = flow_utils.get_old_flow(self.context, flow)
 
-        logger.info('Flow rules were built: correlation_id=%s, flow_id=%s', correlation_id, flow_id)
+        self.log.debug('Create NEW/UPDATED flow')
+
+        self.log.info('Flow rules were built: flow_id=%s', flow_id)
         rules = flow_utils.build_rules(flow)
-        # TODO: add tx to store_flow
-        flow_utils.store_flow(flow, tx)
-        logger.info('Flow was stored: correlation_id=%s, flow_id=%s', correlation_id, flow_id)
-        message_utils.send_install_commands(rules, correlation_id)
 
-        MessageItem.delete_flow(old_flow['flowid'], old_flow, correlation_id, tx)
+        # TODO: add tx to store_flow
+        flow_utils.store_flow(self.context, flow, tx)
+        self.log.info('Flow was stored: flow_id=%s', flow_id)
+
+        message_utils.send_install_commands(self.context, rules)
+
+        self.log.debug('Remove OLD flow')
+        self.delete_flow(old_flow['flowid'], old_flow, tx)
 
         payload = {'payload': flow, 'clazz': MT_FLOW_RESPONSE}
-        message_utils.send_info_message(payload, correlation_id)
+        message_utils.send_info_message(self.context, payload)
 
     def not_allow_flow_operation(self):
         op = self.payload['operation'].upper()
@@ -516,15 +496,13 @@ class MessageItem(model.JsonSerializable):
         return not allow
 
     def flow_operation(self):
-        correlation_id = self.correlation_id
-        timestamp = self.timestamp
-        payload = self.payload
-
-        operation = payload['operation']
-        flows = payload['payload']
+        operation = self.payload['operation']
+        flows = self.payload['payload']
         forward = flows['forward']
         reverse = flows['reverse']
         flow_id = forward['flowid']
+
+        self.log.debug('Flow %s request processing', operation)
 
         OP = operation.upper()
         if self.not_allow_flow_operation():
@@ -563,20 +541,20 @@ class MessageItem(model.JsonSerializable):
 
                     if not from_nb:
                         message_utils.send_info_message(
-                                {'payload': forward, 'clazz': MT_FLOW_RESPONSE},
-                                correlation_id)
+                                self.context,
+                                {'payload': forward, 'clazz': MT_FLOW_RESPONSE})
                         message_utils.send_info_message(
-                                {'payload': reverse, 'clazz': MT_FLOW_RESPONSE},
-                                correlation_id)
+                                self.context,
+                                {'payload': reverse, 'clazz': MT_FLOW_RESPONSE})
 
                 elif OP == "UPDATE":
                     self.update_flow(flow_id, forward, correlation_id, tx)
                     self.update_flow(flow_id, reverse, correlation_id, tx)
 
                 else:
-                    logger.warn('Flow operation is not supported: '
-                                'operation=%s, timestamp=%s, correlation_id=%s,',
-                                operation, timestamp, correlation_id)
+                    self.log.warning(
+                            'Unsupported flow operation %r have been requested',
+                            operation)
                     raise exc.NoHandlerError
 
             except neo4j_errors.TransientError as e:
@@ -597,35 +575,12 @@ class MessageItem(model.JsonSerializable):
                     extra_args['topic'] = config.KAFKA_NORTHBOUND_TOPIC
 
                 message_utils.send_error_message(
-                        correlation_id, kind, str(e), flow_id, **extra_args)
+                        self.context, kind, str(e), flow_id, **extra_args)
 
                 raise exc.UnrecoverableError()
 
-        logger.info('Flow %s request processed: '
-                    'timestamp=%s, correlation_id=%s, payload=%s',
-                    operation, timestamp, correlation_id, payload)
-
-    @staticmethod
-    def fetch_isls(pull=True,sort_key='src_switch'):
-        """
-        :return: an unsorted list of ISL relationships with all properties pulled from the db if pull=True
-        """
-        try:
-            # query = "MATCH (a:switch)-[r:isl]->(b:switch) RETURN r ORDER BY r.src_switch, r.src_port"
-            isls=[]
-            rels = graph.match(rel_type="isl")
-            for rel in rels:
-                if pull:
-                    graph.pull(rel)
-                isls.append(rel)
-
-            if sort_key:
-                isls = sorted(isls, key=lambda x: x[sort_key])
-
-            return isls
-        except Exception as e:
-            logger.exception('FAILED to get ISLs from the DB ', e.message)
-            raise
+        self.log.info('Flow %s request processed', operation)
+        return True
 
     def handle_flow_topology_sync(self):
         payload = {
