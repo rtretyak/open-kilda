@@ -15,19 +15,17 @@
 #
 
 import logging
-import threading
 
-from py2neo import Node
+import gevent.lock
 from py2neo.database import status as neo4j_errors
 
-from topologylistener import model
+from topologylistener import config
 from topologylistener import db
 from topologylistener import exc
-from topologylistener import isl_utils
-from topologylistener import config
-from topologylistener import exc
 from topologylistener import flow_utils
+from topologylistener import isl_utils
 from topologylistener import message_utils
+from topologylistener import model
 
 logger = logging.getLogger(__name__)
 
@@ -90,8 +88,7 @@ features_status_transport_to_app_map = {
 
 
 # This is used for blocking on flow changes.
-# flow_sem = multiprocessing.Semaphore()
-neo4j_update_lock = threading.RLock()
+neo4j_update_lock = gevent.lock.RLock()
 
 
 def update_config():
@@ -131,10 +128,10 @@ class MessageItem(model.JsonSerializable):
         self.message = message
 
         self.timestamp = model.TimeProperty.new_from_java_timestamp(
-                kwargs.get("timestamp"))
+                self.message.get("timestamp"))
         self.payload = self.message["payload"]
         self.kind = self.payload["clazz"]
-        self.reply_to = kwargs.get("reply_to", "")
+        self.reply_to = self.message.get("reply_to", "")
 
         self.correlation_id = self.message.get("correlation_id", "admin-request")
 
@@ -429,7 +426,7 @@ class MessageItem(model.JsonSerializable):
                 )
 
     @staticmethod
-    def delete_flow(flow_id, flow, correlation_id, parent_tx=None, propagate=True, from_nb=False):
+    def delete_flow(flow_id, flow, correlation_id, tx=None, propagate=True, from_nb=False):
         """
         Simple algorithm - delete the stuff in the DB, send delete commands, send a response.
         Complexity - each segment in the path may have a separate cookie, so that information needs to be gathered.
@@ -553,7 +550,8 @@ class MessageItem(model.JsonSerializable):
             # TODO: We really should use the reply-to field, at least in NB, so that we know to send the response.
             if OP in ("PUSH", "PUSH_PROPAGATE", "UNPUSH", "UNPUSH_PROPAGATE"):
                 message_utils.send_error_message(
-                    correlation_id, 'REQUEST_INVALID', op+"-FAILURE - NOT ALLOWED RIGHT NOW - Toggle the feature to allow this behavior", "",
+                    correlation_id, 'REQUEST_INVALID',
+                    OP + "-FAILURE - NOT ALLOWED RIGHT NOW - Toggle the feature to allow this behavior", "",
                     destination="NORTHBOUND", topic=config.KAFKA_NORTHBOUND_TOPIC)
 
             return True
@@ -562,8 +560,7 @@ class MessageItem(model.JsonSerializable):
                     'timestamp=%s, correlation_id=%s, payload=%s',
                     operation, timestamp, correlation_id, payload)
 
-        # flow_sem.acquire(timeout=10)  # wait 10 seconds .. then proceed .. possibly causing some issue.
-        with neo4j_update_lock, graph.begin() as tx:
+        with db.LockAdapter.wrap_lock(neo4j_update_lock), graph.begin() as tx:
             try:
                 if OP in ("CREATE", "PUSH", "PUSH_PROPAGATE"):
                     propagate = OP in ("CREATE", "PUSH_PROPAGATE")

@@ -18,6 +18,7 @@ import logging
 import os
 import pprint
 import socket
+import time
 
 import py2neo
 
@@ -104,6 +105,31 @@ class ResponseIterator(collections.Iterator):
 
     def __iter__(self):
         return self
+
+
+class LockAdapter(object):
+    @classmethod
+    def wrap_lock(cls, lock):
+        timeout = config.getint('neo4j', 'lock_timeout')
+        return cls(lock, timeout)
+
+    def __init__(self, lock, timeout):
+        self.lock = lock
+        self.timeout = timeout
+
+    def __enter__(self):
+        timeout = time.time() + self.timeout
+        while time.time() < timeout:
+            if self.lock.acquire(blocking=False):
+                break
+            time.sleep(.1)
+        else:
+            raise exc.LockTimeoutError(self.timeout)
+
+        return self
+
+    def __exit__(self, *exc_info):
+        self.lock.release()
 
 
 # neo4j monkey patching staff
