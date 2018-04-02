@@ -309,7 +309,8 @@ public class CacheBolt
         data.getFlows().forEach(flowCache::putFlow);
 
         logger.info("Loaded flows {}", flowCache);
-        emitRestoreCommands(data.getFlows(), tuple);
+        //FIXME: looks like we don't need restore at all
+        //emitRestoreCommands(data.getFlows(), tuple);
 
         logger.info("Flows restore commands sent");
 
