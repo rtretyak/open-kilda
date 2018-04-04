@@ -46,6 +46,7 @@ public class MeterPool {
     }
 
     public synchronized Integer allocate(final String switchId, final String flowId, Integer meterId) {
+        logger.debug("Register preallocated meter id in MeterPool: {}", meterId);
         ResourcePool switchPool = getSwitchPool(switchId);
         Set<Integer> flowPool = getFlowPool(flowId);
 
@@ -60,6 +61,7 @@ public class MeterPool {
     }
 
     public synchronized Integer allocate(final String switchId, final String flowId) {
+        logger.debug("Allocate new meter id in MeterPool");
         ResourcePool switchPool = getSwitchPool(switchId);
         Set<Integer> flowPool = getFlowPool(flowId);
 
@@ -70,6 +72,7 @@ public class MeterPool {
     }
 
     public synchronized Integer deallocate(final String switchId, final String flowId) {
+        logger.debug("Deallocate meter id switchId={} flowId={}", switchId, flowId);
         ResourcePool switchPool = switchMeterPool.get(switchId);
         if (switchPool == null) {
             logger.error("Could not deallocate meter: no such switch {}", switchId);
@@ -94,6 +97,7 @@ public class MeterPool {
     }
 
     private ResourcePool getSwitchPool(final String switchId) {
+        logger.debug("Fetch/create stitch pool");
         ResourcePool switchPool = switchMeterPool.get(switchId);
         if (switchPool == null) {
             switchPool = new ResourcePool(MIN_METER_ID, MAX_METER_ID);
@@ -104,6 +108,7 @@ public class MeterPool {
     }
 
     private Set<Integer> getFlowPool(final String flowId) {
+        logger.debug("Fetch/create flow pool");
         return flowMeterPool.computeIfAbsent(flowId, k -> new HashSet<>());
     }
 }
