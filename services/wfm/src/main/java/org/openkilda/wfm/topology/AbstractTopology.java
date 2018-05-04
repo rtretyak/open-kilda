@@ -28,6 +28,7 @@ import org.openkilda.wfm.error.ConfigurationException;
 import org.openkilda.wfm.error.NameCollisionException;
 import org.openkilda.wfm.error.StreamNameCollisionException;
 import org.openkilda.wfm.kafka.CustomNamedSubscription;
+import org.openkilda.wfm.topology.event.OFEventWFMTopology;
 import org.openkilda.wfm.topology.utils.HealthCheckBolt;
 import org.openkilda.wfm.topology.utils.KafkaRecordTranslator;
 
@@ -295,5 +296,14 @@ public abstract class AbstractTopology<T extends AbstractTopologyConfig> impleme
 
     private String makeKafkaGroupName(String spoutId) {
         return kafkaNamingStrategy.kafkaConsumerGroupName(format("%s__%s", topologyName, spoutId));
+    }
+
+    public static void main(String[] args) {
+        try {
+            LaunchEnvironment env = new LaunchEnvironment(args);
+            (new OFEventWFMTopology(env)).setup();
+        } catch (Exception e) {
+            System.exit(handleLaunchException(e));
+        }
     }
 }

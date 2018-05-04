@@ -51,7 +51,7 @@ public class StatsTopology extends AbstractTopology<StatsTopologyConfig> {
         super(env, StatsTopologyConfig.class);
     }
 
-    public static void main(String[] args) throws Exception {
+    public static void main(String[] args) {
         try {
             LaunchEnvironment env = new LaunchEnvironment(args);
             (new StatsTopology(env)).setup();
