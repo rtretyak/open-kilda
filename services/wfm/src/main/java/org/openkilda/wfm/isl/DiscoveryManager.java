@@ -240,7 +240,7 @@ public class DiscoveryManager {
         }
 
         subject = new DiscoveryNode(
-                node.switchId, node.portId,
+                node.switchId.toLowerCase(), node.portId,
                 this.islHealthCheckInterval,
                 this.forlornLimit
         );

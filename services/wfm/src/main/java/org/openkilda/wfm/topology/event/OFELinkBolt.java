@@ -32,7 +32,10 @@ import org.openkilda.messaging.BaseMessage;
 import org.openkilda.messaging.Destination;
 import org.openkilda.messaging.HeartBeat;
 import org.openkilda.messaging.Utils;
+import org.openkilda.messaging.command.CommandData;
 import org.openkilda.messaging.command.CommandMessage;
+import org.openkilda.messaging.command.discovery.DiscoveryFilterEntity;
+import org.openkilda.messaging.command.discovery.DiscoveryFilterPopulateData;
 import org.openkilda.messaging.command.discovery.NetworkCommandData;
 import org.openkilda.messaging.ctrl.AbstractDumpState;
 import org.openkilda.messaging.ctrl.state.OFELinkBoltState;
@@ -249,18 +252,6 @@ public class OFELinkBolt
     protected void doWork(Tuple tuple) {
         if (CtrlAction.boltHandlerEntrance(this, tuple))
             return;
-//
-// (crimi) - commenting out the filter code until we re-evaluate the design. Also, this code
-// should probably be embedded in "handleIslEvent"
-//        /*
-//         * Check whether ISL Filter needs to be engaged.
-//         */
-//        String source = tuple.getSourceComponent();
-//        if (source.equals(OFEventWFMTopology.SPOUT_ID_INPUT)) {
-//            PopulateIslFilterAction action = new PopulateIslFilterAction(this, tuple, islFilter);
-//            action.run();
-//            return;
-//        }
 
         String json = tuple.getString(0);
 
@@ -277,6 +268,8 @@ public class OFELinkBolt
         try {
             if (message instanceof InfoMessage) {
                 dispatch(tuple, (InfoMessage) message);
+            } else if (message instanceof CommandMessage) {
+                handleCommand(tuple, (CommandMessage) message);
             } else if (message instanceof HeartBeat) {
                 logger.debug("Got speaker's heart beat");
                 stateTransition(State.NEED_SYNC, State.OFFLINE);
@@ -414,6 +407,13 @@ public class OFELinkBolt
         collector.emit(topoEngTopic, tuple, new Values(PAYLOAD, json));
     }
 
+    private void handleCommand(Tuple input, CommandMessage command) {
+        CommandData data = command.getData();
+        if (data instanceof DiscoveryFilterPopulateData) {
+            commandPopulateIslFilter((DiscoveryFilterPopulateData)data);
+        }
+    }
+
     private void handlePortEvent(Tuple tuple, PortInfoData portData) {
         String switchID = portData.getSwitchId();
         String portID = "" + portData.getPortNo();
@@ -468,6 +468,15 @@ public class OFELinkBolt
             // If the state changed, notify the TE.
             logger.info("DISCO: ISL Event: switch={} port={} state={}", switchID, portID, state);
             passToTopologyEngine(tuple);
+        }
+    }
+
+    private void commandPopulateIslFilter(DiscoveryFilterPopulateData payload) {
+        logger.info("Clean ISL filter");
+        islFilter.clear();
+        for (DiscoveryFilterEntity entity : payload.getFilter()) {
+            logger.info("Add ISL filter record - switchID=\"{}\" portId=\"{}\"", entity.switchId, entity.portId);
+            islFilter.add(entity.switchId, entity.portId);
         }
     }
 

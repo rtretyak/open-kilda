@@ -17,6 +17,7 @@ import org.apache.storm.tuple.Tuple;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+// FIXME(surabujin): not used, can/should be removed
 public class PopulateIslFilterAction extends AbstractAction {
     private final Logger logger = LoggerFactory.getLogger(PopulateIslFilterAction.class);
     private final DummyIIslFilter filter;
