@@ -1,0 +1,77 @@
+@startuml
+title FLOW ping(verification) topology
+
+participant Time
+participant FlowFetcher
+participant Neo4j
+
+control kilda.flow.status
+control kilda.stats
+
+participant PingManager
+participant TimeoutManager
+
+control kilda.speaker
+control kilda.ping
+
+participant FL
+
+control SW.source
+control SW.dest
+
+note right of FlowFetcher: must be 1\nin system
+
+Time -> FlowFetcher: periodic tick
+activate FlowFetcher
+FlowFetcher -> Neo4j: fetch all flow
+activate Neo4j
+Neo4j -> FlowFetcher: [flows]
+deactivate Neo4j
+
+note right of FlowFetcher: for each flow
+FlowFetcher -> PingManager: flow (field grouping)
+deactivate FlowFetcher
+
+activate PingManager
+note right of PingManager: make ping request\n(source dest)
+PingManager -> TimeoutManager: ping request
+
+activate TimeoutManager
+note right of TimeoutManager: scheduleTimeout for\npingId
+TimeoutManager -> kilda.speaker: proxy\nping request
+
+kilda.speaker -> FL: ping request
+activate FL
+FL -> SW.source: ping package
+deactivate FL
+
+alt normal workflow
+    SW.source -> SW.dest: ping package
+    SW.dest -> FL: ping package
+    activate FL
+    note right of FL: measure flow\nlatency
+    FL -> kilda.ping: ping response
+    deactivate FL
+    kilda.ping -> TimeoutManager: ping response
+    note right of TimeoutManager: cancel timeout
+    TimeoutManager -> PingManager: proxy\nping response
+else lack of capabilities
+    activate FL
+    note right of FL: Sw.dest is not\ncapable to catch ping
+    FL -> kilda.ping: ping response\n(lack of capabilities)
+    deactivate FL
+    kilda.ping -> TimeoutManager: ping response\n(lack of capabilities)
+    note right of TimeoutManager: cancel timeout
+    TimeoutManager -> PingManager: ping response\n(lack of capabilities)
+else timeout
+    note right of TimeoutManager: pass N time ticks
+    TimeoutManager -> PingManager: ping response\n(timeout)
+end
+deactivate TimeoutManager
+
+note right of PingManager: prepare ping status
+PingManager -> kilda.flow.status: ping result
+PingManager -> kilda.stats: flow latency
+deactivate PingManager
+
+@enduml
