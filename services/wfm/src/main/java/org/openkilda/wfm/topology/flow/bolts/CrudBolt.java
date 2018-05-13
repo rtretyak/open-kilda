@@ -83,6 +83,7 @@ import org.apache.storm.task.OutputCollector;
 import org.apache.storm.task.TopologyContext;
 import org.apache.storm.topology.OutputFieldsDeclarer;
 import org.apache.storm.topology.base.BaseStatefulBolt;
+import org.apache.storm.tuple.Fields;
 import org.apache.storm.tuple.Tuple;
 import org.apache.storm.tuple.Values;
 
@@ -104,6 +105,21 @@ import javax.annotation.Nullable;
 public class CrudBolt
         extends BaseStatefulBolt<InMemoryKeyValueState<String, FlowCache>>
         implements ICtrlBolt {
+    public static final String BOLT_ID = ComponentType.CRUD_BOLT.toString();
+
+    public static final String FIELD_ID_MESSAGE = AbstractTopology.MESSAGE_FIELD;
+
+    public static final String STREAM_CREATE_ID = StreamType.CREATE.toString();
+    public static final Fields STREAM_CREATE_FIELDS = new Fields(FIELD_ID_MESSAGE);
+
+    public static final String STREAM_UPDATE_ID = StreamType.UPDATE.toString();
+    public static final Fields STREAM_UPDATE_FIELDS = STREAM_CREATE_FIELDS;
+
+    public static final String STREAM_DELETE_ID = StreamType.DELETE.toString();
+    public static final Fields STREAM_DELETE_FIELDS = STREAM_CREATE_FIELDS;
+
+    public static final String STREAM_STATUS_ID = StreamType.STATUS.toString();
+    public static final Fields STREAM_STATUS_FIELDS = STREAM_CREATE_FIELDS;
 
     public static final String STREAM_ID_CTRL = "ctrl";
 
@@ -171,10 +187,10 @@ public class CrudBolt
      */
     @Override
     public void declareOutputFields(OutputFieldsDeclarer outputFieldsDeclarer) {
-        outputFieldsDeclarer.declareStream(StreamType.CREATE.toString(), AbstractTopology.fieldMessage);
-        outputFieldsDeclarer.declareStream(StreamType.UPDATE.toString(), AbstractTopology.fieldMessage);
-        outputFieldsDeclarer.declareStream(StreamType.DELETE.toString(), AbstractTopology.fieldMessage);
-        outputFieldsDeclarer.declareStream(StreamType.STATUS.toString(), AbstractTopology.fieldMessage);
+        outputFieldsDeclarer.declareStream(STREAM_CREATE_ID, STREAM_CREATE_FIELDS);
+        outputFieldsDeclarer.declareStream(STREAM_UPDATE_ID, STREAM_UPDATE_FIELDS);
+        outputFieldsDeclarer.declareStream(STREAM_DELETE_ID, STREAM_DELETE_FIELDS);
+        outputFieldsDeclarer.declareStream(STREAM_STATUS_ID, STREAM_STATUS_FIELDS);
         outputFieldsDeclarer.declareStream(StreamType.RESPONSE.toString(), AbstractTopology.fieldMessage);
         outputFieldsDeclarer.declareStream(StreamType.CACHE_SYNC.toString(), AbstractTopology.fieldMessage);
         outputFieldsDeclarer.declareStream(StreamType.ERROR.toString(), FlowTopology.fieldsMessageErrorType);

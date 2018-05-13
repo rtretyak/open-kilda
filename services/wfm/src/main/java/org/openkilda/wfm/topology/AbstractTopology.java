@@ -27,6 +27,8 @@ import org.openkilda.wfm.kafka.CustomNamedSubscription;
 import org.openkilda.wfm.topology.utils.HealthCheckBolt;
 import org.openkilda.wfm.topology.utils.KafkaRecordTranslator;
 
+import lombok.AccessLevel;
+import lombok.Getter;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.common.serialization.StringDeserializer;
@@ -59,6 +61,8 @@ public abstract class AbstractTopology implements Topology {
     protected final PropertiesReader propertiesReader;
     protected TopologyConfig config;
     protected final String topologyName;
+
+    @Getter(AccessLevel.PROTECTED)
     private final Properties kafkaProperties;
 
     public static final String SPOUT_ID_CTRL = "ctrl.in";

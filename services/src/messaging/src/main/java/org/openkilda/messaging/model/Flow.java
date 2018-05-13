@@ -19,6 +19,7 @@ import static com.google.common.base.MoreObjects.toStringHelper;
 
 import org.openkilda.messaging.Utils;
 import org.openkilda.messaging.info.event.PathInfoData;
+import org.openkilda.messaging.info.event.PathNode;
 import org.openkilda.messaging.payload.flow.FlowState;
 
 import com.fasterxml.jackson.annotation.JsonCreator;
@@ -31,6 +32,8 @@ import lombok.Getter;
 import lombok.Setter;
 
 import java.io.Serializable;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Objects;
 
 /**
@@ -46,6 +49,8 @@ public class Flow implements Serializable {
     private static final long serialVersionUID = 1L;
 
     private static long MASK_COOKIE_FLAGS = 0x0000_0000_FFFF_FFFFL;
+    private static long COOKIE_FLAG_FORWARD = 0x4000000000000000L;
+    private static long COOKIE_FLAG_REVERSE = 0x2000000000000000L;
 
     /**
      * Flow id.
@@ -143,6 +148,53 @@ public class Flow implements Serializable {
      */
     @JsonProperty("state")
     private FlowState state;
+
+    // TODO(surabujin): unit test
+    public static Flow ofPeer(Flow peer, int meterId) {
+        long cookie = peer.getCookie() & MASK_COOKIE_FLAGS;
+        if (peer.getCookie() != 0) {
+            if (peer.cookieMarkedAsFroward()) {
+                cookie |= COOKIE_FLAG_REVERSE;
+            } else if (peer.cookieMarkedAsReversed()) {
+                cookie |= COOKIE_FLAG_FORWARD;
+            } else {
+                throw new IllegalArgumentException(String.format(
+                        "Unable to determine flow direction (cookie = 0x%x)", peer.getCookie()));
+            }
+        }
+
+        final PathInfoData peerPathInfo = peer.getFlowPath();
+        PathInfoData pathInfo = null;
+        if (peerPathInfo != null) {
+            ArrayList<PathNode> path = new ArrayList<>(peerPathInfo.getPath().size());
+            List<PathNode> peerPath = peerPathInfo.getPath();
+            for (int i = 0; i < peerPath.size(); i++) {
+                PathNode dest = new PathNode(peerPath.get(i));
+                dest.setSeqId(i);
+
+                path.add(dest);
+            }
+            pathInfo = new PathInfoData(peerPathInfo.getLatency(), path);
+        }
+
+        return new Flow(
+                peer.getFlowId(),
+                peer.getBandwidth(),
+                peer.isIgnoreBandwidth(),
+                cookie,
+                peer.getDescription(),
+                peer.getLastUpdated(),
+                peer.getDestinationSwitch(),
+                peer.getSourceSwitch(),
+                peer.getDestinationPort(),
+                peer.getSourcePort(),
+                peer.getDestinationVlan(),
+                peer.getSourceVlan(),
+                meterId,
+                peer.getTransitVlan(),
+                pathInfo,
+                peer.getState());
+    }
 
     /**
      * Default constructor.
@@ -315,7 +367,7 @@ public class Flow implements Serializable {
         boolean isMatch;
 
         if ((cookie & 0xE000000000000000L) != 0) {
-            isMatch = (cookie & 0x4000000000000000L) != 0;
+            isMatch = (cookie & COOKIE_FLAG_FORWARD) != 0;
         } else {
             isMatch = (cookie & 0x0080000000000000L) == 0;
         }
@@ -326,7 +378,7 @@ public class Flow implements Serializable {
     private boolean cookieMarkedAsReversed() {
         boolean isMatch;
         if ((cookie & 0xE000000000000000L) != 0) {
-            isMatch = (cookie & 0x2000000000000000L) != 0;
+            isMatch = (cookie & COOKIE_FLAG_REVERSE) != 0;
         } else {
             isMatch = (cookie & 0x0080000000000000L) != 0;
         }

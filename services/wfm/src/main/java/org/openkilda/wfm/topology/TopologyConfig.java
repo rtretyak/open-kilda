@@ -1,3 +1,18 @@
+/* Copyright 2018 Telstra Open Source
+ *
+ *   Licensed under the Apache License, Version 2.0 (the "License");
+ *   you may not use this file except in compliance with the License.
+ *   You may obtain a copy of the License at
+ *
+ *       http://www.apache.org/licenses/LICENSE-2.0
+ *
+ *   Unless required by applicable law or agreed to in writing, software
+ *   distributed under the License is distributed on an "AS IS" BASIS,
+ *   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ *   See the License for the specific language governing permissions and
+ *   limitations under the License.
+ */
+
 package org.openkilda.wfm.topology;
 
 import org.openkilda.pce.provider.AuthNeo4j;
@@ -36,6 +51,7 @@ public class TopologyConfig {
 
     private String kafkaCtrlTopic;
     private String kafkaFlowTopic;
+    private String kafkaFlowSyncTopic;
     private String kafkaHealthCheckTopic;
     private String kafkaNorthboundTopic;
     private String kafkaOtsdbTopic;
@@ -80,11 +96,13 @@ public class TopologyConfig {
         discoveryTimeout = config.getInteger("discovery.timeout");
         discoveryLimit = config.getInteger("discovery.limit");
         discoverySpeakerFailureTimeout = config.getFloat("discovery.speaker-failure-timeout");
+        discoveryDumpRequestTimeout = config.getFloat("discovery.dump-request-timeout-seconds");
+
         keepRemovedIslTimeout = config.getInteger("discovery.keep.removed.isl");
+
         filterDirectory = config.getString("filter.directory");
         loggerLevel = Level.valueOf(config.getString("logger.level"));
         loggerWatermark = config.getString("logger.watermark");
-        discoveryDumpRequestTimeout = config.getFloat("discovery.dump-request-timeout-seconds");
 
         zookeeperHosts = config.getString("zookeeper.hosts");
         zookeeperSessionTimeout = (int) (config.getFloat("zookeeper.session.timeout") * 1000);
@@ -95,6 +113,7 @@ public class TopologyConfig {
 
         kafkaCtrlTopic = config.getString("kafka.topic.ctrl");
         kafkaFlowTopic = config.getString("kafka.topic.flow");
+        kafkaFlowSyncTopic = config.getString("kafka.topic.flow.sync");
         kafkaHealthCheckTopic = config.getString("kafka.topic.health.check");
         kafkaNorthboundTopic = config.getString("kafka.topic.northbound");
         kafkaOtsdbTopic = config.getString("kafka.topic.opentsdb");
@@ -121,10 +140,6 @@ public class TopologyConfig {
         neo4jHost = config.getString("neo4j.hosts");
         neo4jLogin = config.getString("neo4j.user");
         neo4jPassword = config.getString("neo4j.pswd");
-    }
-
-    public Integer getWorkers() {
-        return workers;
     }
 
     /**

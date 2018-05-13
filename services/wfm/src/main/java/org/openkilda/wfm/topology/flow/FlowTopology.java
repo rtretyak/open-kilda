@@ -22,6 +22,8 @@ import org.openkilda.wfm.CtrlBoltRef;
 import org.openkilda.wfm.LaunchEnvironment;
 import org.openkilda.wfm.error.ConfigurationException;
 import org.openkilda.wfm.error.NameCollisionException;
+import org.openkilda.wfm.share.bolt.OrderAwareKafkaBolt;
+import org.openkilda.wfm.share.bolt.TupleToOrderKeyMapper;
 import org.openkilda.wfm.topology.AbstractTopology;
 import org.openkilda.wfm.topology.flow.bolts.CrudBolt;
 import org.openkilda.wfm.topology.flow.bolts.ErrorBolt;
@@ -30,13 +32,18 @@ import org.openkilda.wfm.topology.flow.bolts.SpeakerBolt;
 import org.openkilda.wfm.topology.flow.bolts.SplitterBolt;
 import org.openkilda.wfm.topology.flow.bolts.TopologyEngineBolt;
 import org.openkilda.wfm.topology.flow.bolts.TransactionBolt;
+import org.openkilda.wfm.topology.flow.bolts.sync.FlowSyncAssembler;
+import org.openkilda.wfm.topology.flow.bolts.sync.FlowSyncEncoder;
+import org.openkilda.wfm.topology.flow.bolts.sync.FlowSyncRouter;
 
 import org.apache.storm.generated.ComponentObject;
 import org.apache.storm.generated.StormTopology;
 import org.apache.storm.kafka.bolt.KafkaBolt;
+import org.apache.storm.kafka.bolt.selector.DefaultTopicSelector;
 import org.apache.storm.kafka.spout.KafkaSpout;
 import org.apache.storm.kafka.spout.KafkaSpoutConfig;
 import org.apache.storm.topology.BoltDeclarer;
+import org.apache.storm.topology.IRichBolt;
 import org.apache.storm.topology.TopologyBuilder;
 import org.apache.storm.tuple.Fields;
 import org.slf4j.Logger;
@@ -237,11 +244,35 @@ public class FlowTopology extends AbstractTopology {
         createCtrlBranch(builder, ctrlTargets);
         createHealthCheckHandler(builder, ServiceType.FLOW_TOPOLOGY.getId());
 
+        // Flow status sync
+        builder.setBolt(FlowSyncRouter.BOLT_ID, new FlowSyncRouter())
+                .setMaxTaskParallelism(1)
+                .shuffleGrouping(ComponentType.CRUD_BOLT.toString(), StreamType.CREATE.toString())
+                .shuffleGrouping(ComponentType.CRUD_BOLT.toString(), StreamType.UPDATE.toString())
+                .shuffleGrouping(ComponentType.CRUD_BOLT.toString(), StreamType.DELETE.toString())
+                .shuffleGrouping(ComponentType.CRUD_BOLT.toString(), StreamType.STATUS.toString());
+
+        builder.setBolt(FlowSyncAssembler.BOLT_ID, new FlowSyncAssembler())
+                .fieldsGrouping(FlowSyncRouter.BOLT_ID, new Fields(FlowSyncRouter.FIELD_ID_FLOW_ID));
+
+        builder.setBolt(FlowSyncEncoder.BOLT_ID, new FlowSyncEncoder())
+                .shuffleGrouping(FlowSyncAssembler.BOLT_ID);
+
+        builder.setBolt(ComponentType.FLOW_SYNC_KAFKA_BOLT.toString(), makeFlowSyncKafkaBolt())
+                .fieldsGrouping(FlowSyncEncoder.BOLT_ID, new Fields(FlowSyncEncoder.FIELD_ID_FLOW_ID));
+
         // builder.setBolt(
         //         ComponentType.TOPOLOGY_ENGINE_OUTPUT.toString(), createKafkaBolt(config.getKafkaTopoEngTopic()), 1)
         //         .shuffleGrouping(ComponentType.LCM_FLOW_SYNC_BOLT.toString(), LcmFlowCacheSyncBolt.STREAM_ID_TPE);
 
         return builder.createTopology();
+    }
+
+    private IRichBolt makeFlowSyncKafkaBolt() {
+        return new OrderAwareKafkaBolt<String, String>(
+                getKafkaProperties(), new TupleToOrderKeyMapper(Utils.FLOW_ID),
+                new DefaultTopicSelector(getConfig().getKafkaFlowSyncTopic()))
+                .setTimeWindow(Constants.instance.getFlowSyncOrderingWindowSize());
     }
 
     /**

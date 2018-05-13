@@ -85,6 +85,10 @@ public class InfoMessage extends Message {
         setData(data);
     }
 
+    public InfoMessage(InfoData payload, String correlationId) {
+        this(payload, System.currentTimeMillis(), correlationId);
+    }
+
     /**
      * Returns payload of the information message.
      *
