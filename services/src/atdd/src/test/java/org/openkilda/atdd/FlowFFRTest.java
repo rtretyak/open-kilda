@@ -24,6 +24,7 @@ import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
 
 import org.openkilda.LinksUtils;
+import org.openkilda.atdd.service.SwitchService;
 import org.openkilda.flow.FlowUtils;
 import org.openkilda.messaging.info.event.PathInfoData;
 import org.openkilda.messaging.payload.flow.FlowEndpointPayload;
@@ -57,6 +58,8 @@ public class FlowFFRTest {
     private static final Integer sourceVlan = 1000;
     private static final Integer destinationVlan = 1000;
     private static final int bandwidth = 1000;
+
+    private final SwitchService switchService = new SwitchService();
 
     @Given("^basic multi-path topology$")
     public void a_multi_path_topology() throws Throwable {
@@ -123,14 +126,14 @@ public class FlowFFRTest {
     @When("^a switch (.*) port (\\d+) is disabled")
     public void switchPortDisable(String switchId, int portNo) throws Throwable {
         String switchName = getSwitchName(switchId);
-        assertTrue(portDown(switchName, String.valueOf(portNo)));
+        assertTrue(switchService.portDown(switchName, portNo));
         TimeUnit.SECONDS.sleep(DEFAULT_DISCOVERY_INTERVAL);
     }
 
     @When("^a switch (.*) port (\\d+) is enabled")
     public void switchPortEnable(String switchId, int portNo) throws Throwable {
         String switchName = getSwitchName(switchId);
-        assertTrue(portUp(switchName, String.valueOf(portNo)));
+        assertTrue(switchService.portUp(switchName, portNo));
         TimeUnit.SECONDS.sleep(DEFAULT_DISCOVERY_INTERVAL);
     }
 
@@ -277,44 +280,6 @@ public class FlowFFRTest {
 
         System.out.println(String.format("===> Response = %s", result.toString()));
         System.out.println(String.format("===> Set ISL Discovered Time: %,.3f", getTimeDuration(current)));
-
-        return result.getStatus() == 200;
-    }
-
-    private boolean portDown(String switchName, String portNo) throws Throwable {
-        System.out.println("\n==> Set Port Down");
-
-        long current = System.currentTimeMillis();
-        Client client = ClientBuilder.newClient(new ClientConfig());
-        Response result = client
-                .target(trafficEndpoint)
-                .path("/port/down")
-                .queryParam("switch", switchName)
-                .queryParam("port", portNo)
-                .request()
-                .post(Entity.json(""));
-
-        System.out.println(String.format("===> Response = %s", result.toString()));
-        System.out.println(String.format("===> Set Port Down Time: %,.3f", getTimeDuration(current)));
-
-        return result.getStatus() == 200;
-    }
-
-    private boolean portUp(String switchName, String portNo) throws Throwable {
-        System.out.println("\n==> Set Port Up");
-
-        long current = System.currentTimeMillis();
-        Client client = ClientBuilder.newClient(new ClientConfig());
-        Response result = client
-                .target(trafficEndpoint)
-                .path("/port/up")
-                .queryParam("switch", switchName)
-                .queryParam("port", portNo)
-                .request()
-                .post(Entity.json(""));
-
-        System.out.println(String.format("===> Response = %s", result.toString()));
-        System.out.println(String.format("===> Set Port Up Time: %,.3f", getTimeDuration(current)));
 
         return result.getStatus() == 200;
     }

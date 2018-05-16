@@ -93,11 +93,11 @@ public class StubServiceFactory {
                                 new IslInfoData(0,
                                         asList(new PathNode(link.getSrcSwitch().getDpId(), link.getSrcPort(), 0),
                                                 new PathNode(link.getDstSwitch().getDpId(), link.getDstPort(), 1)),
-                                        link.getMaxBandwidth(), IslChangeType.DISCOVERED, 0),
+                                        link.getMaxBandwidth(), 0, IslChangeType.DISCOVERED, null, null),
                                 new IslInfoData(0,
                                         asList(new PathNode(link.getDstSwitch().getDpId(), link.getDstPort(), 0),
                                                 new PathNode(link.getSrcSwitch().getDpId(), link.getSrcPort(), 1)),
-                                        link.getMaxBandwidth(), IslChangeType.DISCOVERED, 0)
+                                        link.getMaxBandwidth(), 0, IslChangeType.DISCOVERED, null, null)
                         ))
                         .collect(toList()));
 

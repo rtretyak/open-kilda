@@ -24,17 +24,28 @@ import cucumber.api.java.en.Given;
 import cucumber.api.java.en.Then;
 import cucumber.api.java.en.When;
 import org.glassfish.jersey.client.ClientConfig;
+import org.junit.Assert;
+
+import org.openkilda.atdd.service.IslService;
+import org.openkilda.messaging.info.event.IslChangeType;
+import org.openkilda.messaging.info.event.IslInfoData;
+import org.openkilda.messaging.model.NetworkEndpoint;
 import org.openkilda.topo.ITopology;
 import org.openkilda.topo.TestUtils;
 import org.openkilda.topo.builders.TestTopologyBuilder;
 import org.openkilda.topo.TopologyHelp;
 import org.openkilda.topo.TopologyPrinter;
 
+import java.util.List;
+import java.util.concurrent.TimeUnit;
 import javax.ws.rs.client.Client;
 import javax.ws.rs.client.ClientBuilder;
 import javax.ws.rs.core.Response;
 
 public class TopologyDiscoveryBasicTest {
+    private final IslService islService = new IslService();
+
+    private Long recordedIslUpdateTime = null;
 
     public long pre_start;
     public long start;
@@ -115,5 +126,51 @@ public class TopologyDiscoveryBasicTest {
 
         assertEquals(200, result.getStatus());
 
+    }
+
+    @When("^wait for FoodLight connection lost detected$")
+    public void waitEnoughForFLOutageDetection() {
+        long now = System.currentTimeMillis();
+        long sleepTill = now + TimeUnit.SECONDS.toMillis(10);
+        while (now < sleepTill) {
+            try {
+                Thread.sleep(sleepTill - now + 1);
+            } catch (InterruptedException e) {
+                // this is ok
+            }
+            now = System.currentTimeMillis();
+        }
+    }
+
+    @Then("^record isl modify time (\\S+)-(\\d+) ==> (\\S+)-(\\d+)$")
+    public void recordIslModifyTime(String srcSwitch, int srcPort, String dstSwitch, int dstPort) {
+        IslInfoData isl = fetchIsl(srcSwitch, srcPort, dstSwitch, dstPort);
+        recordedIslUpdateTime = isl.getTimeModifyMillis();
+    }
+
+    @Then("^recorded isl modify time (\\S+)-(\\d+) ==> (\\S+)-(\\d+) must match$")
+    public void verifyIslModifyTime(String srcSwitch, int srcPort, String dstSwitch, int dstPort) {
+        IslInfoData isl = fetchIsl(srcSwitch, srcPort, dstSwitch, dstPort);
+        Assert.assertEquals("ISL have been updated", recordedIslUpdateTime, isl.getTimeModifyMillis());
+    }
+
+    @Then("^recorded isl modify time (\\S+)-(\\d+) ==> (\\S+)-(\\d+) must go forward$")
+    public void verifyIslModifyTimeGoesForward(String srcSwitch, int srcPort, String dstSwitch, int dstPort) {
+        IslInfoData isl = fetchIsl(srcSwitch, srcPort, dstSwitch, dstPort);
+        Assert.assertTrue("ISL have not been updated", recordedIslUpdateTime < isl.getTimeModifyMillis());
+    }
+
+    private IslInfoData fetchIsl(String srcSwitch, int srcPort, String dstSwitch, int dstPort) {
+        NetworkEndpoint source = new NetworkEndpoint(srcSwitch, srcPort);
+        NetworkEndpoint dest = new NetworkEndpoint(dstSwitch, dstPort);
+        List<IslInfoData> results = islService.fetchIsl(source, dest);
+
+        Assert.assertEquals("Unable to find ISL", 1, results.size());
+
+        IslInfoData match = results.get(0);
+        IslChangeType desiredState = IslChangeType.DISCOVERED;
+        Assert.assertEquals(String.format("ISL is not in %s state", desiredState), desiredState, match.getState());
+
+        return match;
     }
 }

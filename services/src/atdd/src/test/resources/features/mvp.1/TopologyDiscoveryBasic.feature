@@ -79,3 +79,39 @@ Feature: Basic Topology Discovery
     And the controller learns the topology
     When send malformed lldp packet
     Then the topology is not changed
+
+  @MPV1
+  Scenario: Handle FL outage
+
+    Verify correct work of topology discovery subsystem after loosing
+    connection between event/wfm topology and FL
+
+    It must not resend discovery events for ISL exist on "connection lost"
+    time. It must send discovery events for new ISL - reported by FL after
+    "connection" recovery.
+
+    Given a clean controller
+    And a random linear topology of 3 switches
+    And the controller learns the topology
+
+    Then make topology change - disable port de:ad:be:af:00:00:01-1
+    When wait topology change - isl de:ad:be:af:00:00:01-1 ==> de:ad:be:af:00:00:02-1 is missing
+    And wait topology change - isl de:ad:be:af:00:00:02-1 ==> de:ad:be:af:00:00:01-1 is missing
+    And link between controller and kafka are lost
+    And wait for FoodLight connection lost detected
+    And 2 seconds passed
+
+    Then record isl modify time de:ad:be:af:00:00:02-2 ==> de:ad:be:af:00:00:03-1
+    And 2 seconds passed
+
+    Then link between controller and kafka restored
+    And 5 seconds passed
+
+    Then recorded isl modify time de:ad:be:af:00:00:02-2 ==> de:ad:be:af:00:00:03-1 must match
+
+    Then record isl modify time de:ad:be:af:00:00:02-2 ==> de:ad:be:af:00:00:03-1
+    When make topology change - enable port de:ad:be:af:00:00:01-1
+    Then wait topology change - isl de:ad:be:af:00:00:01-1 ==> de:ad:be:af:00:00:02-1 is available
+    And wait topology change - isl de:ad:be:af:00:00:02-1 ==> de:ad:be:af:00:00:01-1 is available
+
+    Then recorded isl modify time de:ad:be:af:00:00:02-2 ==> de:ad:be:af:00:00:03-1 must go forward
