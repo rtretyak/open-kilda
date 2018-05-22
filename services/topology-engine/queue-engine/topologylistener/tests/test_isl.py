@@ -15,7 +15,6 @@
 
 import logging
 import unittest
-import uuid
 
 import py2neo
 
@@ -23,8 +22,8 @@ from topologylistener import exc
 from topologylistener import flow_utils
 from topologylistener import isl_utils
 from topologylistener import messageclasses
-from topologylistener import message_utils
 from topologylistener import model
+from topologylistener.tests import share
 
 ISL_STATUS_ACTIVE = 'active'
 ISL_STATUS_INACTIVE = 'inactive'
@@ -41,7 +40,7 @@ ISL_STATUS_PROPS_MOVED = {
 dpid_test_marker = 0xfffe000000000000
 dpid_protected_bits = 0xffffff0000000000
 
-neo4j_connect = flow_utils.graph
+neo4j_connect = share.env.neo4j_connect
 
 
 def clean_neo4j_test_data(tx):
@@ -110,7 +109,7 @@ def make_switch_add(dpid):
         'hostname': 'test-sw-{}'.format(dpid.replace(':', '')),
         'description': 'test switch',
         'controller': '172.16.0.1'}
-    command = make_command(payload)
+    command = share.command(payload)
     return messageclasses.MessageItem(**command).handle()
 
 
@@ -123,7 +122,7 @@ def make_switch_remove(dpid):
         'hostname': 'test-sw-{}'.format(dpid.replace(':', '')),
         'description': 'test switch',
         'controller': '172.16.0.1'}
-    command = make_command(payload)
+    command = share.command(payload)
     return messageclasses.MessageItem(**command).handle()
 
 
@@ -133,7 +132,7 @@ def make_port_down(endpoint):
         'state': 'DOWN',
         'switch_id': endpoint.dpid,
         'port_no': endpoint.port}
-    command = make_command(payload)
+    command = share.command(payload)
 
     return messageclasses.MessageItem(**command).handle()
 
@@ -145,7 +144,7 @@ def make_isl_pair(source, dest):
 
 
 def make_isl_discovery(isl):
-    command = make_command({
+    command = share.command({
         'clazz': messageclasses.MT_ISL,
         'state': 'DISCOVERED',
         'latency_ns': 20,
@@ -162,7 +161,7 @@ def make_isl_discovery(isl):
 
 
 def make_isl_failed(source):
-    command = make_command({
+    command = share.command({
         'clazz': messageclasses.MT_ISL,
         'state': 'FAILED',
         'latency_ns': 20,
@@ -176,7 +175,7 @@ def make_isl_failed(source):
 
 
 def make_isl_moved(isl):
-    command = make_command({
+    command = share.command({
         'clazz': messageclasses.MT_ISL,
         'state': 'MOVED',
         'latency_ns': 20,
@@ -194,20 +193,6 @@ def make_isl_moved(isl):
         ]
     })
     return messageclasses.MessageItem(**command).handle()
-
-
-def make_command(payload):
-    return {
-        'payload': payload,
-        'clazz': message_utils.MT_INFO,
-        'timestamp': 0,
-        'correlation_id': make_correlation_id('test-isl')}
-
-
-def make_correlation_id(prefix=''):
-    if prefix and prefix[-1] != '.':
-        prefix += '.'
-    return '{}{}'.format(prefix, uuid.uuid1())
 
 
 def make_datapath_id(number):
@@ -240,11 +225,6 @@ class TestIsl(unittest.TestCase):
     dst_endpoint = model.NetworkEndpoint(make_datapath_id(2), 4)
 
     def setUp(self):
-        logging.basicConfig(level=logging.DEBUG)
-        with neo4j_connect.begin() as tx:
-            clean_neo4j_test_data(tx)
-
-    def tearDown(self):
         with neo4j_connect.begin() as tx:
             clean_neo4j_test_data(tx)
 
@@ -302,6 +282,7 @@ class TestIsl(unittest.TestCase):
         self.ensure_isl_props(neo4j_connect, forward, status_down)
         self.ensure_isl_props(neo4j_connect, reverse, status_down)
 
+    @unittest.skip('ISL conflict resolution was disabled, because event topology is responsible for them now')
     def test_isl_replug(self):
         sw_alpha = make_datapath_id(1)
         sw_beta = make_datapath_id(2)
