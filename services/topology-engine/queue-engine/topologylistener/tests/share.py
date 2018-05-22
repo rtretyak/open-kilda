@@ -17,7 +17,33 @@ import logging
 import uuid
 
 from topologylistener import flow_utils
+from topologylistener import messageclasses
 from topologylistener import message_utils
+
+
+def exec_isl_discovery(isl, **fields):
+    payload = payload_isl_info(isl, **fields)
+    return messageclasses.MessageItem(**command(payload)).handle()
+
+
+def payload_isl_info(isl, **fields):
+    payload = {
+        'state': 'DISCOVERED',
+        'latency_ns': 20,
+        'speed': 1000,
+        'available_bandwidth': 1000}
+    payload.update(fields)
+    payload.update({
+        'clazz': messageclasses.MT_ISL,
+        'path': [
+            {
+                'switch_id': isl.source.dpid,
+                'port_no': isl.source.port},
+            {
+                'switch_id': isl.dest.dpid,
+                'port_no': isl.dest.port}]})
+
+    return payload
 
 
 def command(payload, **fields):

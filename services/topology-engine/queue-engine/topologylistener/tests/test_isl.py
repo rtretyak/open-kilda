@@ -13,13 +13,12 @@
 #   limitations under the License.
 #
 
-import logging
+import datetime
 import unittest
 
 import py2neo
 
 from topologylistener import exc
-from topologylistener import flow_utils
 from topologylistener import isl_utils
 from topologylistener import messageclasses
 from topologylistener import model
@@ -139,25 +138,8 @@ def make_port_down(endpoint):
 
 def make_isl_pair(source, dest):
     forward = model.InterSwitchLink(source, dest, None)
-    make_isl_discovery(forward)
-    make_isl_discovery(forward.reversed())
-
-
-def make_isl_discovery(isl):
-    command = share.command({
-        'clazz': messageclasses.MT_ISL,
-        'state': 'DISCOVERED',
-        'latency_ns': 20,
-        'speed': 1000,
-        'available_bandwidth': 1000,
-        'path': [
-            {
-                'switch_id': isl.source.dpid,
-                'port_no': isl.source.port},
-            {
-                'switch_id': isl.dest.dpid,
-                'port_no': isl.dest.port}]})
-    return messageclasses.MessageItem(**command).handle()
+    share.exec_isl_discovery(forward)
+    share.exec_isl_discovery(forward.reversed())
 
 
 def make_isl_failed(source):
@@ -241,12 +223,12 @@ class TestIsl(unittest.TestCase):
         status_up = {'actual': ISL_STATUS_ACTIVE, 'status': ISL_STATUS_ACTIVE}
 
         # 0 0
-        self.assertTrue(make_isl_discovery(forward))
+        self.assertTrue(share.exec_isl_discovery(forward))
 
         # 1 0
         self.ensure_isl_props(neo4j_connect, forward, status_half_up)
         self.ensure_isl_props(neo4j_connect, reverse, status_down)
-        self.assertTrue(make_isl_discovery(reverse))
+        self.assertTrue(share.exec_isl_discovery(reverse))
 
         # 1 1
         self.ensure_isl_props(neo4j_connect, forward, status_up)
@@ -256,7 +238,7 @@ class TestIsl(unittest.TestCase):
         # 0 1
         self.ensure_isl_props(neo4j_connect, forward, status_down)
         self.ensure_isl_props(neo4j_connect, reverse, status_half_up)
-        self.assertTrue(make_isl_discovery(forward))
+        self.assertTrue(share.exec_isl_discovery(forward))
 
         # 1 1
         self.ensure_isl_props(neo4j_connect, forward, status_up)
@@ -266,7 +248,7 @@ class TestIsl(unittest.TestCase):
         # 1 0
         self.ensure_isl_props(neo4j_connect, forward, status_half_up)
         self.ensure_isl_props(neo4j_connect, reverse, status_down)
-        self.assertTrue(make_isl_discovery(reverse))
+        self.assertTrue(share.exec_isl_discovery(reverse))
 
         # 1 1
         self.ensure_isl_props(neo4j_connect, forward, status_up)
@@ -305,10 +287,10 @@ class TestIsl(unittest.TestCase):
         for dpid in sw_alpha, sw_beta, sw_gamma, sw_delta:
             self.assertTrue(make_switch_add(dpid))
 
-        self.assertTrue(make_isl_discovery(isl_alpha_beta))
-        self.assertTrue(make_isl_discovery(isl_beta_alpha))
-        self.assertTrue(make_isl_discovery(isl_gamma_delta))
-        self.assertTrue(make_isl_discovery(isl_delta_gamma))
+        self.assertTrue(share.exec_isl_discovery(isl_alpha_beta))
+        self.assertTrue(share.exec_isl_discovery(isl_beta_alpha))
+        self.assertTrue(share.exec_isl_discovery(isl_gamma_delta))
+        self.assertTrue(share.exec_isl_discovery(isl_delta_gamma))
 
         self.ensure_isl_props(
                 neo4j_connect, isl_alpha_beta, ISL_STATUS_PROPS_UP)
@@ -328,7 +310,7 @@ class TestIsl(unittest.TestCase):
 
         # replug
         self.assertTrue(
-                make_isl_discovery(isl_beta_gamma))
+                share.exec_isl_discovery(isl_beta_gamma))
         # alpha <-> beta is down
         self.ensure_isl_props(
                 neo4j_connect, isl_alpha_beta, ISL_STATUS_PROPS_HALF_UP)
@@ -346,7 +328,7 @@ class TestIsl(unittest.TestCase):
                 neo4j_connect, isl_gamma_beta, ISL_STATUS_PROPS_DOWN)
 
         self.assertTrue(
-                make_isl_discovery(isl_gamma_beta))
+                share.exec_isl_discovery(isl_gamma_beta))
         # alpha <-> beta is down
         self.ensure_isl_props(
                 neo4j_connect, isl_alpha_beta, ISL_STATUS_PROPS_HALF_UP)
@@ -370,8 +352,8 @@ class TestIsl(unittest.TestCase):
 
         self.assertTrue(make_switch_add(src_endpoint.dpid))
         self.assertTrue(make_switch_add(dst_endpoint.dpid))
-        self.assertTrue(make_isl_discovery(forward))
-        self.assertTrue(make_isl_discovery(reverse))
+        self.assertTrue(share.exec_isl_discovery(forward))
+        self.assertTrue(share.exec_isl_discovery(reverse))
 
         self.ensure_isl_props(neo4j_connect, forward, ISL_STATUS_PROPS_UP)
         self.ensure_isl_props(neo4j_connect, reverse, ISL_STATUS_PROPS_UP)
@@ -434,10 +416,10 @@ class TestIsl(unittest.TestCase):
         for dpid in sw_alpha, sw_beta, sw_gamma:
             self.assertTrue(make_switch_add(dpid))
 
-        self.assertTrue(make_isl_discovery(isl_alpha_beta))
-        self.assertTrue(make_isl_discovery(isl_beta_alpha))
-        self.assertTrue(make_isl_discovery(isl_beta_gamma))
-        self.assertTrue(make_isl_discovery(isl_gamma_beta))
+        self.assertTrue(share.exec_isl_discovery(isl_alpha_beta))
+        self.assertTrue(share.exec_isl_discovery(isl_beta_alpha))
+        self.assertTrue(share.exec_isl_discovery(isl_beta_gamma))
+        self.assertTrue(share.exec_isl_discovery(isl_gamma_beta))
 
         self.assertTrue(make_port_down(isl_alpha_beta.dest))
         self.ensure_isl_props(
@@ -473,7 +455,7 @@ class TestIsl(unittest.TestCase):
             (dst_endpoint, down))
 
         self.assertTrue(
-            make_isl_discovery(isl),
+            share.exec_isl_discovery(isl),
             'ISL discovery command have failed')
 
         self.ensure_isl_costs(
@@ -498,7 +480,7 @@ class TestIsl(unittest.TestCase):
                 (dst_endpoint, 1))
 
         self.assertTrue(
-                make_isl_discovery(isl), 'ISL discovery command have failed')
+                share.exec_isl_discovery(isl), 'ISL discovery command have failed')
 
         self.ensure_isl_costs(
                 (src_endpoint, 1),
@@ -511,6 +493,71 @@ class TestIsl(unittest.TestCase):
 
         make_isl_moved(forward)
         self.ensure_isl_props(neo4j_connect, forward, ISL_STATUS_PROPS_MOVED)
+
+    def test_isl_without_life_cycle_fields(self):
+        sw_alpha = make_datapath_id(1)
+        sw_beta = make_datapath_id(2)
+        isl_alpha_beta = model.InterSwitchLink(
+                model.NetworkEndpoint(sw_alpha, 2),
+                model.NetworkEndpoint(sw_beta, 2), None)
+
+        self.assertTrue(make_switch_add(sw_alpha))
+        self.assertTrue(make_switch_add(sw_beta))
+
+        self.assertTrue(share.exec_isl_discovery(isl_alpha_beta))
+
+        with neo4j_connect.begin() as tx:
+            neo4j_connect.pull(isl_utils.fetch(tx, isl_alpha_beta))
+            isl_utils.set_props(
+                    tx, isl_alpha_beta,
+                    {'time_create': None, 'time_modify': None})
+
+        self.assertTrue(share.exec_isl_discovery(isl_alpha_beta))
+
+    def test_time_update_on_isl_discovery(self):
+        sw_alpha = make_datapath_id(1)
+        sw_beta = make_datapath_id(2)
+        isl_alpha_beta = model.InterSwitchLink(
+                model.NetworkEndpoint(sw_alpha, 2),
+                model.NetworkEndpoint(sw_beta, 2), None)
+
+        self.assertTrue(make_switch_add(sw_alpha))
+        self.assertTrue(make_switch_add(sw_beta))
+
+        update_point_a = model.TimeProperty.now(milliseconds_precission=True)
+
+        message = share.command(share.payload_isl_info(isl_alpha_beta))
+        message['timestamp'] = update_point_a.as_java_timestamp()
+        self.assertTrue(messageclasses.MessageItem(**message).handle())
+
+        recovered = model.TimeProperty.new_from_java_timestamp(message['timestamp'])
+        self.assertEquals(update_point_a.value, recovered.value)
+
+        with neo4j_connect.begin() as tx:
+            isl = isl_utils.fetch(tx, isl_alpha_beta)
+            neo4j_connect.pull(isl)
+
+            db_ctime = model.TimeProperty.new_from_db(isl['time_create'])
+            self.assertEqual(update_point_a.value, db_ctime.value)
+
+            db_mtime = model.TimeProperty.new_from_db(isl['time_modify'])
+            self.assertEqual(update_point_a.value, db_mtime.value)
+
+        # one more update
+        update_point_b = model.TimeProperty.now(milliseconds_precission=True)
+        self.assertNotEqual(update_point_a.value, update_point_b.value)
+
+        message['timestamp'] = update_point_b.as_java_timestamp()
+        self.assertTrue(messageclasses.MessageItem(**message).handle())
+        with neo4j_connect.begin() as tx:
+            isl = isl_utils.fetch(tx, isl_alpha_beta)
+            neo4j_connect.pull(isl)
+
+            db_ctime = model.TimeProperty.new_from_db(isl['time_create'])
+            self.assertEqual(update_point_a.value, db_ctime.value)
+
+            db_mtime = model.TimeProperty.new_from_db(isl['time_modify'])
+            self.assertEqual(update_point_b.value, db_mtime.value)
 
     def ensure_isl_props(self, tx, isl, props):
         isl_record = isl_utils.fetch(tx, isl)
