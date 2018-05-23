@@ -20,21 +20,21 @@ import static org.junit.Assert.assertTrue;
 import static org.openkilda.DefaultParameters.trafficEndpoint;
 import static org.openkilda.flow.FlowUtils.getTimeDuration;
 
-import cucumber.api.java.en.Given;
-import cucumber.api.java.en.Then;
-import cucumber.api.java.en.When;
-import org.glassfish.jersey.client.ClientConfig;
-import org.junit.Assert;
-
 import org.openkilda.atdd.service.IslService;
 import org.openkilda.messaging.info.event.IslChangeType;
 import org.openkilda.messaging.info.event.IslInfoData;
 import org.openkilda.messaging.model.NetworkEndpoint;
 import org.openkilda.topo.ITopology;
 import org.openkilda.topo.TestUtils;
-import org.openkilda.topo.builders.TestTopologyBuilder;
 import org.openkilda.topo.TopologyHelp;
 import org.openkilda.topo.TopologyPrinter;
+import org.openkilda.topo.builders.TestTopologyBuilder;
+
+import cucumber.api.java.en.Given;
+import cucumber.api.java.en.Then;
+import cucumber.api.java.en.When;
+import org.glassfish.jersey.client.ClientConfig;
+import org.junit.Assert;
 
 import java.util.List;
 import java.util.concurrent.TimeUnit;
@@ -47,7 +47,7 @@ public class TopologyDiscoveryBasicTest {
 
     private Long recordedIslUpdateTime = null;
 
-    public long pre_start;
+    public long preStart;
     public long start;
     public long finish;
     public ITopology expected;
@@ -56,40 +56,41 @@ public class TopologyDiscoveryBasicTest {
     protected void deploy_toplogy(ITopology t) throws Throwable {
         expected = t;
         String json = TopologyPrinter.toMininetJson(t);
-        pre_start = System.currentTimeMillis();
+        preStart = System.currentTimeMillis();
         assertTrue(TopologyHelp.CreateMininetTopology(json));
         start = System.currentTimeMillis();
     }
 
-	@Given("^a random linear topology of (\\d+) switches$")
-	public void a_random_linear_topology_of(int numSwitches) throws Throwable {
+    @Given("^a random linear topology of (\\d+) switches$")
+    public void randomLinearTopology(int numSwitches) throws Throwable {
         deploy_toplogy(TestTopologyBuilder.buildLinearTopo(numSwitches));
-	}
+    }
 
-	@Given("^a random tree topology with depth of (\\d+) and fanout of (\\d+)$")
-	public void a_random_full_mesh_topology_of(int depth, int fanout) throws Throwable {
-        deploy_toplogy(TestTopologyBuilder.buildTreeTopo(depth,fanout));
-	}
+    @Given("^a random tree topology with depth of (\\d+) and fanout of (\\d+)$")
+    public void randomFullMeshTopology(int depth, int fanout) throws Throwable {
+        deploy_toplogy(TestTopologyBuilder.buildTreeTopo(depth, fanout));
+    }
 
-	@When("^the controller learns the topology$")
-	public void the_controller_learns_the_topology() throws Throwable {
+    @When("^the controller learns the topology$")
+    public void controllerLearnsTopology() throws Throwable {
         // NB: translateTopoEngTopo includes some heuristics regarding waiting for things
         // TODO: pass the convergence time to this function, since it is the one that loops
         //       and times out; currently it just has a default time; but should be based on the test.
         //       alternatively, as is currently the case, it keeps going as long as there is change
         //       and/or the expected topology is reached.
         ITopology actual = TestUtils.translateTopoEngTopo(expected);
-        TestUtils.validateTopos(expected,actual);
+        TestUtils.validateTopos(expected, actual);
         finish = System.currentTimeMillis();
-	}
+    }
 
-	@Then("^the controller should converge within (\\d+) milliseconds$")
-	public void the_controller_should_converge_within_milliseconds(int delta) throws Throwable {
-        if (!(delta >= (finish - start))){
-            System.out.println(String.format("Failed finish-start convergence: delta_ma:%d, actual:%d", delta, (finish-start)));
+    @Then("^the controller should converge within (\\d+) milliseconds$")
+    public void controllerShouldConvergeWithinMilliseconds(int delta) throws Throwable {
+        if (!(delta >= (finish - start))) {
+            System.out.println(
+                    String.format("Failed finish-start convergence: delta_ma:%d, actual:%d", delta, (finish - start)));
         }
         assertTrue(delta >= (finish - start));
-	    // This next test is a little suspect .. it is unclear how much latency is
+        // This next test is a little suspect .. it is unclear how much latency is
         // introduced through mininet. Hypothetically, if mininet took 1 second per switch,
         // then I'd expect the delta between start and finish to be real small, 1-2 seconds, even
         // for a 1000 switches.
@@ -97,39 +98,42 @@ public class TopologyDiscoveryBasicTest {
         // We'll test the pre-start too. This will have to be revisited somehow.
         // The best test will be for the switches to all exist and reach out simultaneously.
         delta += pre_start_handicap; // TODO: make handicap a factor of topology size
-        if (!(delta >= (finish - pre_start))){
-            System.out.println(String.format("Failed finish-pre_start convergence test: delta_ma:%d, actual:%d", delta, (finish-pre_start)));
+        if (!(delta >= (finish - preStart))) {
+            System.out.println(
+                    String.format(
+                            "Failed finish-preStart convergence test: delta_ma:%d, actual:%d",
+                            delta, (finish - preStart)));
         }
-        assertTrue(delta >= (finish - pre_start));
-	}
+        assertTrue(delta >= (finish - preStart));
+    }
 
 
     @Then("^the topology is not changed")
-    public void validate_topology() throws Throwable {
+    public void validateTopology() throws Throwable {
         ITopology actual = TestUtils.translateTopoEngTopo(expected);
-        TestUtils.validateTopos(expected,actual);
+        TestUtils.validateTopos(expected, actual);
     }
 
     @When("^send malformed lldp packet$")
     public void sendMalformedLldpPacket() throws Throwable {
-            System.out.println("=====> Send malformed packet");
+        System.out.println("=====> Send malformed packet");
 
-            long current = System.currentTimeMillis();
-            Client client = ClientBuilder.newClient(new ClientConfig());
-            Response result = client
-                    .target(trafficEndpoint)
-                    .path("/send_malformed_packet")
-                    .request()
-                    .post(null);
-            System.out.println(String.format("======> Response = %s", result.toString()));
-            System.out.println(String.format("======> Send malformed packet Time: %,.3f", getTimeDuration(current)));
+        long current = System.currentTimeMillis();
+        Client client = ClientBuilder.newClient(new ClientConfig());
+        Response result = client
+                .target(trafficEndpoint)
+                .path("/send_malformed_packet")
+                .request()
+                .post(null);
+        System.out.println(String.format("======> Response = %s", result.toString()));
+        System.out.println(String.format("======> Send malformed packet Time: %,.3f", getTimeDuration(current)));
 
         assertEquals(200, result.getStatus());
 
     }
 
     @When("^wait for FoodLight connection lost detected$")
-    public void waitEnoughForFLOutageDetection() {
+    public void waitEnoughForFlOutageDetection() {
         long now = System.currentTimeMillis();
         long sleepTill = now + TimeUnit.SECONDS.toMillis(10);
         while (now < sleepTill) {

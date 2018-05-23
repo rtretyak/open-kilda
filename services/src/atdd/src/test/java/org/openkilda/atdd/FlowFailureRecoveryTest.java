@@ -15,13 +15,13 @@
 
 package org.openkilda.atdd;
 
-import static org.openkilda.DefaultParameters.trafficEndpoint;
-import static org.openkilda.flow.FlowUtils.getTimeDuration;
-import static org.openkilda.flow.FlowUtils.isTrafficTestsEnabled;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
+import static org.openkilda.DefaultParameters.trafficEndpoint;
+import static org.openkilda.flow.FlowUtils.getTimeDuration;
+import static org.openkilda.flow.FlowUtils.isTrafficTestsEnabled;
 
 import org.openkilda.LinksUtils;
 import org.openkilda.atdd.service.SwitchService;
@@ -49,7 +49,7 @@ import javax.ws.rs.client.ClientBuilder;
 import javax.ws.rs.client.Entity;
 import javax.ws.rs.core.Response;
 
-public class FlowFFRTest {
+public class FlowFailureRecoveryTest {
     private static final int DEFAULT_DISCOVERY_INTERVAL = 10;
     private static final String sourceSwitch = "00:00:00:00:00:00:00:02";
     private static final String destinationSwitch = "00:00:00:00:00:00:00:07";
@@ -62,7 +62,7 @@ public class FlowFFRTest {
     private final SwitchService switchService = new SwitchService();
 
     @Given("^basic multi-path topology$")
-    public void a_multi_path_topology() throws Throwable {
+    public void multiPathTopology() throws Throwable {
         String fileName = "topologies/barebones-topology.json";
         ClassLoader classLoader = getClass().getClassLoader();
         URL resource = classLoader.getResource(fileName);
@@ -138,14 +138,14 @@ public class FlowFFRTest {
     }
 
     @When("^a switch (.+) is disconnected$")
-    public void aSwitchDisconnected(String switchId) throws Exception {
+    public void switchDisconnected(String switchId) throws Exception {
         String switchName = getSwitchName(switchId);
         assertTrue(disconnectSwitch(switchName));
         TimeUnit.SECONDS.sleep(DEFAULT_DISCOVERY_INTERVAL);
     }
 
     @When("^a switch (.+) is connected$")
-    public void aSwitchConnected(String switchId) throws Exception {
+    public void switchConnected(String switchId) throws Exception {
         String controller = getController("topologies/multi-path-topology.json");
         String switchName = getSwitchName(switchId);
         assertTrue(connectSwitch(switchName, controller));

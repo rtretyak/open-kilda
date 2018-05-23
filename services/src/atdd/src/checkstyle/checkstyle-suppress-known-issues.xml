@@ -706,61 +706,6 @@
     <suppress files="src/test/java/org/openkilda/atdd/FlowPathTest.java" lines="166" checks="JavadocMethod"/>
     <suppress files="src/test/java/org/openkilda/atdd/FlowPathTest.java" lines="202" checks="JavadocMethod"/>
     <suppress files="src/test/java/org/openkilda/atdd/FlowPathTest.java" lines="210" checks="JavadocMethod"/>
-    <suppress files="src/test/java/org/openkilda/atdd/TopologyDiscoveryBasicTest.java" lines="23" checks="CustomImportOrder"/>
-    <suppress files="src/test/java/org/openkilda/atdd/TopologyDiscoveryBasicTest.java" lines="24" checks="CustomImportOrder"/>
-    <suppress files="src/test/java/org/openkilda/atdd/TopologyDiscoveryBasicTest.java" lines="25" checks="CustomImportOrder"/>
-    <suppress files="src/test/java/org/openkilda/atdd/TopologyDiscoveryBasicTest.java" lines="26" checks="CustomImportOrder"/>
-    <suppress files="src/test/java/org/openkilda/atdd/TopologyDiscoveryBasicTest.java" lines="27" checks="CustomImportOrder"/>
-    <suppress files="src/test/java/org/openkilda/atdd/TopologyDiscoveryBasicTest.java" lines="30" checks="CustomImportOrder"/>
-    <suppress files="src/test/java/org/openkilda/atdd/TopologyDiscoveryBasicTest.java" lines="31" checks="CustomImportOrder"/>
-    <suppress files="src/test/java/org/openkilda/atdd/TopologyDiscoveryBasicTest.java" lines="33" checks="CustomImportOrder"/>
-    <suppress files="src/test/java/org/openkilda/atdd/TopologyDiscoveryBasicTest.java" lines="34" checks="CustomImportOrder"/>
-    <suppress files="src/test/java/org/openkilda/atdd/TopologyDiscoveryBasicTest.java" lines="35" checks="CustomImportOrder"/>
-    <suppress files="src/test/java/org/openkilda/atdd/TopologyDiscoveryBasicTest.java" lines="39" checks="MemberName"/>
-    <suppress files="src/test/java/org/openkilda/atdd/TopologyDiscoveryBasicTest.java" lines="53" checks="Indentation"/>
-    <suppress files="src/test/java/org/openkilda/atdd/TopologyDiscoveryBasicTest.java" lines="53" checks="FileTabCharacter"/>
-    <suppress files="src/test/java/org/openkilda/atdd/TopologyDiscoveryBasicTest.java" lines="54" checks="FileTabCharacter"/>
-    <suppress files="src/test/java/org/openkilda/atdd/TopologyDiscoveryBasicTest.java" lines="54" checks="MethodName"/>
-    <suppress files="src/test/java/org/openkilda/atdd/TopologyDiscoveryBasicTest.java" lines="56" checks="Indentation"/>
-    <suppress files="src/test/java/org/openkilda/atdd/TopologyDiscoveryBasicTest.java" lines="56" checks="FileTabCharacter"/>
-    <suppress files="src/test/java/org/openkilda/atdd/TopologyDiscoveryBasicTest.java" lines="58" checks="Indentation"/>
-    <suppress files="src/test/java/org/openkilda/atdd/TopologyDiscoveryBasicTest.java" lines="58" checks="FileTabCharacter"/>
-    <suppress files="src/test/java/org/openkilda/atdd/TopologyDiscoveryBasicTest.java" lines="59" checks="FileTabCharacter"/>
-    <suppress files="src/test/java/org/openkilda/atdd/TopologyDiscoveryBasicTest.java" lines="59" checks="MethodName"/>
-    <suppress files="src/test/java/org/openkilda/atdd/TopologyDiscoveryBasicTest.java" lines="60" checks="WhitespaceAfter"/>
-    <suppress files="src/test/java/org/openkilda/atdd/TopologyDiscoveryBasicTest.java" lines="61" checks="Indentation"/>
-    <suppress files="src/test/java/org/openkilda/atdd/TopologyDiscoveryBasicTest.java" lines="61" checks="FileTabCharacter"/>
-    <suppress files="src/test/java/org/openkilda/atdd/TopologyDiscoveryBasicTest.java" lines="63" checks="Indentation"/>
-    <suppress files="src/test/java/org/openkilda/atdd/TopologyDiscoveryBasicTest.java" lines="63" checks="FileTabCharacter"/>
-    <suppress files="src/test/java/org/openkilda/atdd/TopologyDiscoveryBasicTest.java" lines="63" checks="JavadocMethod"/>
-    <suppress files="src/test/java/org/openkilda/atdd/TopologyDiscoveryBasicTest.java" lines="64" checks="FileTabCharacter"/>
-    <suppress files="src/test/java/org/openkilda/atdd/TopologyDiscoveryBasicTest.java" lines="71" checks="WhitespaceAfter"/>
-    <suppress files="src/test/java/org/openkilda/atdd/TopologyDiscoveryBasicTest.java" lines="73" checks="Indentation"/>
-    <suppress files="src/test/java/org/openkilda/atdd/TopologyDiscoveryBasicTest.java" lines="73" checks="FileTabCharacter"/>
-    <suppress files="src/test/java/org/openkilda/atdd/TopologyDiscoveryBasicTest.java" lines="75" checks="Indentation"/>
-    <suppress files="src/test/java/org/openkilda/atdd/TopologyDiscoveryBasicTest.java" lines="75" checks="FileTabCharacter"/>
-    <suppress files="src/test/java/org/openkilda/atdd/TopologyDiscoveryBasicTest.java" lines="75" checks="JavadocMethod"/>
-    <suppress files="src/test/java/org/openkilda/atdd/TopologyDiscoveryBasicTest.java" lines="76" checks="FileTabCharacter"/>
-    <suppress files="src/test/java/org/openkilda/atdd/TopologyDiscoveryBasicTest.java" lines="77" checks="WhitespaceAround"/>
-    <suppress files="src/test/java/org/openkilda/atdd/TopologyDiscoveryBasicTest.java" lines="78" checks="LineLength"/>
-    <suppress files="src/test/java/org/openkilda/atdd/TopologyDiscoveryBasicTest.java" lines="78" checks="WhitespaceAround"/>
-    <suppress files="src/test/java/org/openkilda/atdd/TopologyDiscoveryBasicTest.java" lines="78" checks="WhitespaceAround"/>
-    <suppress files="src/test/java/org/openkilda/atdd/TopologyDiscoveryBasicTest.java" lines="81" checks="CommentsIndentation"/>
-    <suppress files="src/test/java/org/openkilda/atdd/TopologyDiscoveryBasicTest.java" lines="81" checks="FileTabCharacter"/>
-    <suppress files="src/test/java/org/openkilda/atdd/TopologyDiscoveryBasicTest.java" lines="89" checks="WhitespaceAround"/>
-    <suppress files="src/test/java/org/openkilda/atdd/TopologyDiscoveryBasicTest.java" lines="90" checks="LineLength"/>
-    <suppress files="src/test/java/org/openkilda/atdd/TopologyDiscoveryBasicTest.java" lines="90" checks="WhitespaceAround"/>
-    <suppress files="src/test/java/org/openkilda/atdd/TopologyDiscoveryBasicTest.java" lines="90" checks="WhitespaceAround"/>
-    <suppress files="src/test/java/org/openkilda/atdd/TopologyDiscoveryBasicTest.java" lines="93" checks="Indentation"/>
-    <suppress files="src/test/java/org/openkilda/atdd/TopologyDiscoveryBasicTest.java" lines="93" checks="FileTabCharacter"/>
-    <suppress files="src/test/java/org/openkilda/atdd/TopologyDiscoveryBasicTest.java" lines="99" checks="WhitespaceAfter"/>
-    <suppress files="src/test/java/org/openkilda/atdd/TopologyDiscoveryBasicTest.java" lines="102" checks="JavadocMethod"/>
-    <suppress files="src/test/java/org/openkilda/atdd/TopologyDiscoveryBasicTest.java" lines="104" checks="Indentation"/>
-    <suppress files="src/test/java/org/openkilda/atdd/TopologyDiscoveryBasicTest.java" lines="106" checks="Indentation"/>
-    <suppress files="src/test/java/org/openkilda/atdd/TopologyDiscoveryBasicTest.java" lines="107" checks="Indentation"/>
-    <suppress files="src/test/java/org/openkilda/atdd/TopologyDiscoveryBasicTest.java" lines="108" checks="Indentation"/>
-    <suppress files="src/test/java/org/openkilda/atdd/TopologyDiscoveryBasicTest.java" lines="113" checks="Indentation"/>
-    <suppress files="src/test/java/org/openkilda/atdd/TopologyDiscoveryBasicTest.java" lines="114" checks="Indentation"/>
     <suppress files="src/test/java/org/openkilda/atdd/TopologyDiscoveryAdvancedTest.java" lines="25" checks="Indentation"/>
     <suppress files="src/test/java/org/openkilda/atdd/TopologyDiscoveryAdvancedTest.java" lines="25" checks="FileTabCharacter"/>
     <suppress files="src/test/java/org/openkilda/atdd/TopologyDiscoveryAdvancedTest.java" lines="26" checks="Indentation"/>
@@ -793,24 +738,6 @@
     <suppress files="src/test/java/org/openkilda/atdd/StatisticsBasicTest.java" lines="21" checks="CustomImportOrder"/>
     <suppress files="src/test/java/org/openkilda/atdd/StatisticsBasicTest.java" lines="67" checks="JavadocMethod"/>
     <suppress files="src/test/java/org/openkilda/atdd/StatisticsBasicTest.java" lines="75" checks="JavadocMethod"/>
-    <suppress files="src/test/java/org/openkilda/atdd/FlowFFRTest.java" lines="21" checks="CustomImportOrder"/>
-    <suppress files="src/test/java/org/openkilda/atdd/FlowFFRTest.java" lines="22" checks="CustomImportOrder"/>
-    <suppress files="src/test/java/org/openkilda/atdd/FlowFFRTest.java" lines="23" checks="CustomImportOrder"/>
-    <suppress files="src/test/java/org/openkilda/atdd/FlowFFRTest.java" lines="24" checks="CustomImportOrder"/>
-    <suppress files="src/test/java/org/openkilda/atdd/FlowFFRTest.java" lines="51" checks="AbbreviationAsWordInName"/>
-    <suppress files="src/test/java/org/openkilda/atdd/FlowFFRTest.java" lines="61" checks="JavadocMethod"/>
-    <suppress files="src/test/java/org/openkilda/atdd/FlowFFRTest.java" lines="62" checks="MethodName"/>
-    <suppress files="src/test/java/org/openkilda/atdd/FlowFFRTest.java" lines="75" checks="JavadocMethod"/>
-    <suppress files="src/test/java/org/openkilda/atdd/FlowFFRTest.java" lines="101" checks="JavadocMethod"/>
-    <suppress files="src/test/java/org/openkilda/atdd/FlowFFRTest.java" lines="112" checks="JavadocMethod"/>
-    <suppress files="src/test/java/org/openkilda/atdd/FlowFFRTest.java" lines="123" checks="JavadocMethod"/>
-    <suppress files="src/test/java/org/openkilda/atdd/FlowFFRTest.java" lines="130" checks="JavadocMethod"/>
-    <suppress files="src/test/java/org/openkilda/atdd/FlowFFRTest.java" lines="137" checks="JavadocMethod"/>
-    <suppress files="src/test/java/org/openkilda/atdd/FlowFFRTest.java" lines="138" checks="MethodName"/>
-    <suppress files="src/test/java/org/openkilda/atdd/FlowFFRTest.java" lines="144" checks="JavadocMethod"/>
-    <suppress files="src/test/java/org/openkilda/atdd/FlowFFRTest.java" lines="145" checks="MethodName"/>
-    <suppress files="src/test/java/org/openkilda/atdd/FlowFFRTest.java" lines="152" checks="JavadocMethod"/>
-    <suppress files="src/test/java/org/openkilda/atdd/FlowFFRTest.java" lines="159" checks="JavadocMethod"/>
     <suppress files="src/test/java/org/openkilda/atdd/floodlight/KafkaBreaker.java" lines="1" checks="RegexpHeader"/>
     <suppress files="src/test/java/org/openkilda/atdd/floodlight/KafkaBreaker.java" lines="17" checks="AbbreviationAsWordInName"/>
     <suppress files="src/test/java/org/openkilda/atdd/floodlight/KafkaBreaker.java" lines="17" checks="MemberName"/>
