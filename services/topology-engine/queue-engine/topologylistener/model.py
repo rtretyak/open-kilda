@@ -15,6 +15,7 @@
 #
 
 import collections
+import json
 
 
 class NetworkEndpoint(
@@ -73,3 +74,18 @@ class InterSwitchLink(
 
     def __str__(self):
         return '{} <===> {}'.format(self.source, self.dest)
+
+
+class JsonSerializable(object):
+    pass
+
+
+class JSONEncoder(json.JSONEncoder):
+    def default(self, o):
+        if isinstance(o, TimeProperty):
+            result = str(o)
+        elif isinstance(o, JsonSerializable):
+            result = vars(o)
+        else:
+            result = super(JSONEncoder, self).default(o)
+        return result
