@@ -124,7 +124,7 @@ def read_config():
 read_config()
 
 
-class MessageItem(object):
+class MessageItem(model.JsonSerializable):
     def __init__(self, **kwargs):
         self.type = kwargs.get("clazz")
         self.timestamp = model.TimeProperty.new_from_java_timestamp(
@@ -133,10 +133,6 @@ class MessageItem(object):
         self.destination = kwargs.get("destination","")
         self.correlation_id = kwargs.get("correlation_id", "admin-request")
         self.reply_to = kwargs.get("reply_to", "")
-
-    def to_json(self):
-        return json.dumps(
-            self, default=lambda o: o.__dict__, sort_keys=True, indent=4)
 
     def get_type(self):
         message_type = self.get_message_type()
