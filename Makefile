@@ -1,7 +1,7 @@
 # 'make' will build the latest and try to run it.
 default: build-latest run-dev
 
-build-base: compile
+build-base:
 	base/hacks/kilda-bins.download.sh
 	base/hacks/shorm.requirements.download.sh
 	rsync -au kilda-bins/zookeeper* services/zookeeper/tar/
@@ -18,7 +18,7 @@ build-base: compile
 	docker build -t kilda/mininet:latest services/mininet
 	docker build -t kilda/logstash:latest services/logstash
 
-build-latest: build-base
+build-latest: build-base compile
 	docker-compose build
 
 run-dev:
@@ -61,7 +61,8 @@ compile:
 	$(MAKE) -C services/wfm all-in-one
 	$(MAKE) -C services/mininet
 
-unit:
+unit: build-base
+	$(MAKE) -C services/topology-engine ARTIFACTS=../../artifact/topology-engine test
 	$(MAKE) -C services/src
 	mvn -B -f services/wfm/pom.xml clean assembly:assembly
 
