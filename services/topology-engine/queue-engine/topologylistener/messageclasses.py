@@ -51,7 +51,6 @@ MT_STATE_TOGGLE = "org.openkilda.messaging.command.system.FeatureToggleStateRequ
 MT_TOGGLE = "org.openkilda.messaging.command.system.FeatureToggleRequest"
 MT_NETWORK_TOPOLOGY_CHANGE = (
     "org.openkilda.messaging.info.event.NetworkTopologyChange")
-CD_NETWORK = "org.openkilda.messaging.command.discovery.NetworkCommandData"
 CD_FLOWS_SYNC_REQUEST = 'org.openkilda.messaging.command.FlowsSyncRequest'
 
 FEATURE_SYNC_OFRULES = 'sync_rules_on_activation'
@@ -145,7 +144,6 @@ class MessageItem(model.JsonSerializable):
                 self.switch_unplug()
             else:
                 raise exc.NoHandlerError
-            event_handled = True
 
         elif self.kind == MT_ISL:
             if self.payload['state'] == "DISCOVERED":
@@ -154,48 +152,35 @@ class MessageItem(model.JsonSerializable):
                 self.isl_discovery_failed()
             else:
                 raise exc.NoHandlerError
-            event_handled = True
 
         elif self.kind == MT_PORT:
             if self.payload['state'] == "DOWN":
                 self.port_down()
-            event_handled = True
 
         elif self.kind == MT_FLOW_INFODATA:
-            event_handled = self.flow_operation()
+            self.flow_operation()
 
-#            elif self.get_command() == CD_FLOWS_SYNC_REQUEST:
-#                self.handle_flow_topology_sync()
-#                event_handled = True
-#
-#            elif self.get_message_type() == MT_STATE_TOGGLE:
-#                event_handled = self.get_feature_toggle_state()
-#            elif self.get_message_type() == MT_TOGGLE:
-#                event_handled = self.update_feature_toggles()
-#
-#            elif self.get_message_type() == MT_SWITCH_EXTENDED:
-#                if features_status[FEATURE_SYNC_OFRULES]:
-#                    event_handled = self.validate_and_sync_switch_rules()
-#                else:
-#                    event_handled = True
-#
-#            elif self.get_message_type() == MT_VALID_REQUEST:
-#                event_handled = self.send_dump_rules_request()
-#
-#            elif self.get_message_type() == MT_SWITCH_RULES:
-#                event_handled = self.validate_switch_rules()
-#
-#            elif self.get_message_type() == MT_SYNC_REQUEST:
-#                event_handled = self.sync_switch_rules()
-#        elif self.kind == CD_NETWORK:
-#            event_handled = self.dump_network()
+        elif self.kind == CD_FLOWS_SYNC_REQUEST:
+            self.handle_flow_topology_sync()
+
+        elif self.kind == MT_STATE_TOGGLE:
+            self.get_feature_toggle_state()
+        elif self.kind == MT_TOGGLE:
+            self.update_feature_toggles()
+
+        elif self.kind == MT_SWITCH_EXTENDED:
+            if features_status[FEATURE_SYNC_OFRULES]:
+                self.validate_and_sync_switch_rules()
+
+        elif self.kind == MT_VALID_REQUEST:
+            self.send_dump_rules_request()
+        elif self.kind == MT_SWITCH_RULES:
+            self.validate_switch_rules()
+        elif self.kind == MT_SYNC_REQUEST:
+            self.sync_switch_rules()
 
         else:
             raise exc.NoHandlerError
-
-        # FIXME(surabujin): in most cases this suggestion is incorrect.
-        if not event_handled:
-            raise exc.RecoverableError
 
         # Cache topology expects to receive OFE events
         if self.kind in {MT_SWITCH, MT_SWITCH, MT_PORT}:
@@ -620,8 +605,6 @@ class MessageItem(model.JsonSerializable):
                     'timestamp=%s, correlation_id=%s, payload=%s',
                     operation, timestamp, correlation_id, payload)
 
-        return True
-
     @staticmethod
     def fetch_isls(pull=True,sort_key='src_switch'):
         """
@@ -664,7 +647,6 @@ class MessageItem(model.JsonSerializable):
                                     message_type=message_utils.MT_INFO,
                                     destination="NORTHBOUND",
                                     topic=config.KAFKA_NORTHBOUND_TOPIC)
-        return True
 
     def update_feature_toggles(self):
         for transport_key in features_status_transport_to_app_map:
@@ -682,8 +664,6 @@ class MessageItem(model.JsonSerializable):
 
         update_config()
 
-        return True
-
     def validate_switch_rules(self):
         diff = flow_utils.validate_switch_rules(self.payload['switch_id'],
                                                 self.payload['flows'])
@@ -693,7 +673,6 @@ class MessageItem(model.JsonSerializable):
                                                      diff["excess_rules"],
                                                      diff["proper_rules"],
                                                      self.correlation_id)
-        return True
 
     def validate_and_sync_switch_rules(self):
         switch_id = self.payload['switch_id']
@@ -710,8 +689,6 @@ class MessageItem(model.JsonSerializable):
                         switch_id, commands)
             message_utils.send_force_install_commands(switch_id, commands,
                                                       self.correlation_id)
-
-        return True
 
     def sync_switch_rules(self):
         switch_id = self.payload['switch_id']
@@ -730,12 +707,10 @@ class MessageItem(model.JsonSerializable):
 
         message_utils.send_sync_rules_response(sync_actions["installed_rules"],
                                                self.correlation_id)
-        return True
 
     def send_dump_rules_request(self):
         message_utils.send_dump_rules_request(self.payload['switch_id'],
                                               self.correlation_id)
-        return True
 
     def update_payload_lifecycle(self, life_cycle):
         for key, value in (
