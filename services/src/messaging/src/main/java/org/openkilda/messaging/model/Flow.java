@@ -149,7 +149,10 @@ public class Flow implements Serializable {
     @JsonProperty("state")
     private FlowState state;
 
-    // TODO(surabujin): unit test
+    /**
+     * Make flow's peer(flow in reverse direction) by existing flow.
+     * TODO(surabujin): unit test
+     */
     public static Flow ofPeer(Flow peer, int meterId) {
         long cookie = peer.getCookie() & MASK_COOKIE_FLAGS;
         if (peer.getCookie() != 0) {

@@ -4,11 +4,6 @@
         "http://checkstyle.sourceforge.net/dtds/suppressions_1_2.dtd">
 
 <suppressions>
-    <suppress files="src/main/java/org/openkilda/messaging/info/InfoMessage.java" lines="121" checks="NeedBraces"/>
-    <suppress files="src/main/java/org/openkilda/messaging/info/InfoMessage.java" lines="122" checks="NeedBraces"/>
-    <suppress files="src/main/java/org/openkilda/messaging/info/InfoMessage.java" lines="124" checks="OperatorWrap"/>
-    <suppress files="src/main/java/org/openkilda/messaging/info/InfoMessage.java" lines="125" checks="OperatorWrap"/>
-    <suppress files="src/main/java/org/openkilda/messaging/info/InfoMessage.java" lines="126" checks="OperatorWrap"/>
     <suppress files="src/main/java/org/openkilda/messaging/info/CacheTimeTag.java" lines="15" checks="EmptyLineSeparator"/>
     <suppress files="src/main/java/org/openkilda/messaging/info/CacheTimeTag.java" lines="18" checks="CustomImportOrder"/>
     <suppress files="src/main/java/org/openkilda/messaging/info/CacheTimeTag.java" lines="48" checks="ParameterName"/>
