@@ -144,8 +144,10 @@ public abstract class AbstractTopology implements Topology {
     private Properties makeKafkaProperties() {
         Properties kafka = new Properties();
 
-        kafka.setProperty(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, "org.apache.kafka.common.serialization.StringSerializer");
-        kafka.setProperty(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, "org.apache.kafka.common.serialization.StringSerializer");
+        kafka.setProperty(
+                ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, "org.apache.kafka.common.serialization.StringSerializer");
+        kafka.setProperty(
+                ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, "org.apache.kafka.common.serialization.StringSerializer");
         kafka.setProperty(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, config.getKafkaHosts());
         kafka.setProperty(ConsumerConfig.GROUP_ID_CONFIG, getTopologyName());
         kafka.setProperty("request.required.acks", "1");

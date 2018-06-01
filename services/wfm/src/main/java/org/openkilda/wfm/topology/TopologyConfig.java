@@ -61,9 +61,9 @@ public class TopologyConfig {
     private String kafkaTopoEngTopic;
     private String kafkaTopoDiscoTopic;
     private String kafkaTopoCacheTopic;
-    private String kafkaTopoNBTopic;
+    private String kafkaTopoNbTopic;
 
-    private String openTsDBHosts;
+    private String openTsDbHosts;
     private Integer openTsdbTimeout;
     private boolean openTsdbClientChunkedRequestsEnabled;
 
@@ -123,9 +123,9 @@ public class TopologyConfig {
         kafkaTopoCacheTopic = config.getString("kafka.topic.topo.cache");
         kafkaTopoDiscoTopic = config.getString("kafka.topic.topo.disco");
         kafkaTopoEngTopic = config.getString("kafka.topic.topo.eng");
-        kafkaTopoNBTopic = config.getString("kafka.topic.topo.nbworker");
+        kafkaTopoNbTopic = config.getString("kafka.topic.topo.nbworker");
 
-        openTsDBHosts = config.getString("opentsdb.hosts");
+        openTsDbHosts = config.getString("opentsdb.hosts");
         openTsdbTimeout = (int) (config.getFloat("opentsdb.timeout") * 1000);
         openTsdbClientChunkedRequestsEnabled = config.getBoolean("opentsdb.client.chunked-requests.enabled");
         openTsdbNumSpouts = config.getInteger("opentsdb.num.spouts");
