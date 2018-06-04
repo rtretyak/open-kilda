@@ -14,19 +14,18 @@
 #   limitations under the License.
 #
 
-import json
 import logging
+
+import gevent.lock
 import threading
 
-from py2neo import Node
-from topologylistener import model
-
+import flow_utils
+import message_utils
 from topologylistener import config
 from topologylistener import db
 from topologylistener import exc
 from topologylistener import isl_utils
-import flow_utils
-import message_utils
+from topologylistener import model
 
 logger = logging.getLogger(__name__)
 graph = flow_utils.graph
@@ -88,8 +87,7 @@ features_status_transport_to_app_map = {
 
 
 # This is used for blocking on flow changes.
-# flow_sem = multiprocessing.Semaphore()
-neo4j_update_lock = threading.RLock()
+neo4j_update_lock = gevent.lock.RLock()
 
 
 def update_config():
@@ -255,8 +253,6 @@ class MessageItem(model.JsonSerializable):
         logger.info('Switch %s deactivation request', switch_id)
 
         with graph.begin() as tx:
-            flow_utils.precreate_switches(tx, switch_id)
-
             q = ('MATCH (target:switch {name: $dpid}) '
                  'SET target.state="inactive"')
             tx.run(q, {'dpid': switch_id})
@@ -603,22 +599,15 @@ class MessageItem(model.JsonSerializable):
                     'timestamp=%s, correlation_id=%s, payload=%s',
                     operation, timestamp, correlation_id, payload)
 
-        tx = None
-        # flow_sem.acquire(timeout=10)  # wait 10 seconds .. then proceed .. possibly causing some issue.
-        neo4j_update_lock.acquire()
-        try:
+        with neo4j_update_lock, graph.begin() as tx:
             OP = operation.upper()
             if OP == "CREATE" or OP == "PUSH" or OP == "PUSH_PROPAGATE":
                 propagate = (OP == "CREATE" or OP == "PUSH_PROPAGATE")
                 from_nb = (OP == "PUSH" or OP == "PUSH_PROPAGATE")
-                tx = graph.begin()
                 self.create_flow(flow_id, forward, correlation_id, tx, propagate, from_nb)
                 self.create_flow(flow_id, reverse, correlation_id, tx, propagate, from_nb)
-                tx.commit()
-                tx = None
 
             elif OP == "DELETE" or OP == "UNPUSH" or OP == "UNPUSH_PROPAGATE":
-                tx = graph.begin()
                 propagate = (OP == "DELETE" or OP == "UNPUSH_PROPAGATE")
                 from_nb = (OP == "UNPUSH" or OP == "UNPUSH_PROPAGATE")
                 MessageItem.delete_flow(flow_id, forward, correlation_id, tx, propagate, from_nb)
@@ -626,29 +615,15 @@ class MessageItem(model.JsonSerializable):
                 if not from_nb:
                     message_utils.send_info_message({'payload': forward, 'clazz': MT_FLOW_RESPONSE}, correlation_id)
                     message_utils.send_info_message({'payload': reverse, 'clazz': MT_FLOW_RESPONSE}, correlation_id)
-                tx.commit()
-                tx = None
 
             elif OP == "UPDATE":
-                tx = graph.begin()
                 MessageItem.update_flow(flow_id, forward, correlation_id, tx)
                 MessageItem.update_flow(flow_id, reverse, correlation_id, tx)
-                tx.commit()
-                tx = None
 
             else:
                 logger.warn('Flow operation is not supported: '
                             'operation=%s, timestamp=%s, correlation_id=%s,',
                             operation, timestamp, correlation_id)
-        except Exception:
-            if tx is not None:
-                tx.rollback()
-            # flow_sem.release()
-            raise
-
-        finally:
-            #flow_sem.release()
-            neo4j_update_lock.release()
 
         logger.info('Flow %s request processed: '
                     'timestamp=%s, correlation_id=%s, payload=%s',
