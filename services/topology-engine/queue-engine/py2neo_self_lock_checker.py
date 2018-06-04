@@ -122,8 +122,11 @@ def reset_db(connect):
 def exec_scenario(producer, stream):
     stream.seek(0, os.SEEK_SET)
     sys.stdout.write('Record ')
+
+    stream = stream_to_records(stream)
+    stream = filter_by_payload_kind(stream)
     try:
-        for idx, record in enumerate(stream_to_records(stream)):
+        for idx, record in enumerate(stream):
             sys.stdout.write('{:d} '.format(idx))
             sys.stdout.flush()
 
@@ -181,6 +184,24 @@ def pack_dpid(dpid):
     chunked = [a + b for a, b in zip(i, i)]
     chunked.pop(0)
     return ':'.join(chunked)
+
+
+def filter_by_payload_kind(stream):
+    allowed = {
+        'org.openkilda.messaging.info.event.SwitchInfoData',
+        'org.openkilda.messaging.info.event.IslInfoData',
+        'org.openkilda.messaging.info.event.PortInfoData'}
+    for raw in stream:
+        message = json.loads(raw)
+        try:
+            payload = message['payload']
+            kind = payload['clazz']
+        except KeyError:
+            kind = None
+        if kind not in allowed:
+            continue
+
+        yield raw
 
 
 def stream_to_records(stream):

@@ -13,17 +13,14 @@
 #   limitations under the License.
 #
 
-import os
-import json
-import db
-import copy
 import calendar
-import time
-import collections
-
-import message_utils
+import copy
+import json
 import logging
+import time
 
+from topologylistener import db
+import message_utils
 
 __all__ = ['graph']
 
@@ -437,13 +434,15 @@ def precreate_switches(tx, *nodes):
     switches = [x.lower() for x in nodes]
     switches.sort()
 
+    q = (
+        "MERGE (sw:switch {name: $dpid}) "
+        "ON CREATE SET sw.state = 'inactive' "
+        "ON MATCH SET sw.tx_override_workaround = 'dummy'")
+
     for dpid in switches:
-        q = (
-            "MERGE (sw:switch {{name:'{}'}}) "
-            "ON CREATE SET sw.state = 'inactive' "
-            "ON MATCH SET sw.tx_override_workaround = 'dummy'").format(dpid)
-        logger.info('neo4j-query: %s', q)
-        tx.run(q)
+        p = {'dpid': dpid}
+        db.log_query('create SWITCH', q, p)
+        tx.run(q, p)
 
 
 def get_flow_segments_by_dst_switch(switch_id):

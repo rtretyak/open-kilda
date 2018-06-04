@@ -346,32 +346,29 @@ class MessageItem(model.JsonSerializable):
             life_cycle = isl_utils.get_life_cycle_fields(tx, isl)
             self.update_payload_lifecycle(life_cycle)
 
-        #
-        # Now handle the second part .. pull properties from link_props if they exist
-        #
+            #
+            # Now handle the second part .. pull properties from link_props if they exist
+            #
+            src_sw, src_pt, dst_sw, dst_pt = a_switch, a_port, b_switch, b_port  # use same names as TER code
+            query = 'MATCH (src:switch)-[i:isl]->(dst:switch) '
+            query += ' WHERE i.src_switch = "%s" ' \
+                     ' AND i.src_port = %s ' \
+                     ' AND i.dst_switch = "%s" ' \
+                     ' AND i.dst_port = %s ' % (src_sw, src_pt, dst_sw, dst_pt)
+            query += ' MATCH (lp:link_props) '
+            query += ' WHERE lp.src_switch = "%s" ' \
+                     ' AND lp.src_port = %s ' \
+                     ' AND lp.dst_switch = "%s" ' \
+                     ' AND lp.dst_port = %s ' % (src_sw, src_pt, dst_sw, dst_pt)
+            query += ' SET i += lp '
+            tx.run(query)
 
-        src_sw, src_pt, dst_sw, dst_pt = a_switch, a_port, b_switch, b_port  # use same names as TER code
-        query = 'MATCH (src:switch)-[i:isl]->(dst:switch) '
-        query += ' WHERE i.src_switch = "%s" ' \
-                 ' AND i.src_port = %s ' \
-                 ' AND i.dst_switch = "%s" ' \
-                 ' AND i.dst_port = %s ' % (src_sw, src_pt, dst_sw, dst_pt)
-        query += ' MATCH (lp:link_props) '
-        query += ' WHERE lp.src_switch = "%s" ' \
-                 ' AND lp.src_port = %s ' \
-                 ' AND lp.dst_switch = "%s" ' \
-                 ' AND lp.dst_port = %s ' % (src_sw, src_pt, dst_sw, dst_pt)
-        query += ' SET i += lp '
-        graph.run(query)
-
-        #
-        # Finally, update the available_bandwidth..
-        #
-        flow_utils.update_isl_bandwidth(src_sw, src_pt, dst_sw, dst_pt)
+            #
+            # Finally, update the available_bandwidth..
+            #
+            flow_utils.update_isl_bandwidth(src_sw, src_pt, dst_sw, dst_pt, tx=tx)
 
         logger.info('ISL %s have been created/updated', isl)
-
-        return True
 
     def handle_topology_change(self):
         if self.get_message_type() != MT_ISL:

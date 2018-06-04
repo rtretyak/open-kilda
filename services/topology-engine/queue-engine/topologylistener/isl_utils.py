@@ -25,6 +25,13 @@ logger = logging.getLogger(__name__)
 
 
 def create_if_missing(tx, timestamp, *links):
+    involved_switches = set()
+    for isl in links:
+        involved_switches.add(isl.source.dpid)
+        involved_switches.add(isl.dest.dpid)
+
+    flow_utils.precreate_switches(tx, *involved_switches)
+
     q = textwrap.dedent("""
         MATCH (src:switch {name: $src_switch})
         MATCH (dst:switch {name: $dst_switch})
