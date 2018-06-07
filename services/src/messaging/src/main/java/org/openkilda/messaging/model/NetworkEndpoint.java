@@ -1,7 +1,5 @@
 package org.openkilda.messaging.model;
 
-import org.openkilda.messaging.Utils;
-
 import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.google.common.base.MoreObjects;
@@ -21,12 +19,6 @@ public class NetworkEndpoint implements Serializable {
     public NetworkEndpoint(
             @JsonProperty("switch-id") String switchDpId,
             @JsonProperty("port-id") Integer portId) {
-        if (!Utils.validateSwitchId(switchDpId)) {
-            throw new IllegalArgumentException(String.format("Invalid switch DPID: %s", switchDpId));
-        }
-        if (portId == null || portId < 0) {
-            throw new IllegalArgumentException(String.format("Invalid portId: %s", portId));
-        }
 
         this.switchDpId = switchDpId;
         this.portId = portId;
@@ -46,8 +38,12 @@ public class NetworkEndpoint implements Serializable {
 
     @Override
     public boolean equals(Object obj) {
-        if (this == obj) return true;
-        if (obj == null || getClass() != obj.getClass()) return false;
+        if (this == obj) {
+            return true;
+        }
+        if (obj == null || getClass() != obj.getClass()) {
+            return false;
+        }
         NetworkEndpoint that = (NetworkEndpoint) obj;
         return new EqualsBuilder()
                 .append(switchDpId, that.switchDpId)

@@ -15,6 +15,7 @@
 
 package org.openkilda.northbound.converter;
 
+import org.openkilda.messaging.model.NetworkEndpoint;
 import org.openkilda.messaging.nbtopology.response.LinkPropsData;
 import org.openkilda.northbound.dto.LinkPropsDto;
 
@@ -23,9 +24,14 @@ import org.mapstruct.Mapper;
 @Mapper(componentModel = "spring")
 public interface LinkPropsMapper {
 
+    /**
+     * Converts link properties to {@link LinkPropsDto}.
+     */
     default LinkPropsDto toDto(LinkPropsData data) {
-        return new LinkPropsDto(data.getSrcSwitch(), data.getSrcPort(),
-                data.getDstSwitch(), data.getDstPort(), data.getProps());
+        NetworkEndpoint source = data.getSource();
+        NetworkEndpoint destination = data.getDestination();
+        return new LinkPropsDto(source.getSwitchDpId(), source.getPortId(),
+                destination.getSwitchDpId(), destination.getPortId(), data.getProps());
     }
 
 }
