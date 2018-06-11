@@ -35,8 +35,7 @@ public class MessageExchanger implements MessageConsumer<Message>, MessageProduc
         preparedMessages.put(correlationId, response);
     }
 
-    public MessageExchanger(Map<String, Message> responses) {
-        preparedMessages.putAll(responses);
+    public MessageExchanger() {
     }
 
     @Override
@@ -56,5 +55,13 @@ public class MessageExchanger implements MessageConsumer<Message>, MessageProduc
         } else {
             responses.put(requestId, preparedMessages.remove(requestId));
         }
+    }
+
+    public void mockResponse(Message message) {
+        preparedMessages.put(message.getCorrelationId(), message);
+    }
+
+    public void resetMockedResponses() {
+        preparedMessages.clear();
     }
 }

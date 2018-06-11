@@ -32,7 +32,7 @@ import org.openkilda.northbound.messaging.MessageProducer;
 import org.openkilda.northbound.service.impl.LinkServiceImpl;
 import org.openkilda.northbound.utils.RequestCorrelationId;
 
-import com.google.common.collect.ImmutableMap;
+import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -45,43 +45,51 @@ import org.springframework.web.client.RestTemplate;
 
 import java.util.Collections;
 import java.util.List;
-import java.util.Map;
 
 @RunWith(SpringRunner.class)
 public class LinkServiceTest {
 
-    private static final String EMPTY_LINK_PROPS_CORRELATION_ID = "empty link props";
-    private static final String LINK_PROPS_CORRELATION_ID = "non empty link props";
-    private static final LinkPropsData LINK_PROPS = new LinkPropsData(
-            new NetworkEndpoint("00:00:00:00:00:00:00:01", 1), new NetworkEndpoint("00:00:00:00:00:00:00:02", 2),
-            Collections.singletonMap("cost", "2"));
-
-    private static final Map<String, Message> responses = ImmutableMap.of(
-            EMPTY_LINK_PROPS_CORRELATION_ID, new ChunkedInfoMessage(null, 0, EMPTY_LINK_PROPS_CORRELATION_ID, null),
-            LINK_PROPS_CORRELATION_ID, new ChunkedInfoMessage(LINK_PROPS, 0, LINK_PROPS_CORRELATION_ID, null)
-    );
-
     @Autowired
     private LinkService linkService;
 
+    @Autowired
+    private MessageExchanger messageExchanger;
+
+    @Before
+    public void reset() {
+        messageExchanger.resetMockedResponses();
+    }
+
     @Test
     public void shouldGetEmptyPropsList() {
-        RequestCorrelationId.create(EMPTY_LINK_PROPS_CORRELATION_ID);
+        final String correlationId = "empty-link-props";
+        Message message = new ChunkedInfoMessage(null, 0, correlationId, null);
+        messageExchanger.mockResponse(message);
+        RequestCorrelationId.create(correlationId);
+
         List<LinkPropsDto> result = linkService.getLinkProps(null, 0, null, 0);
         assertTrue("List of link props should be empty", result.isEmpty());
     }
 
     @Test
     public void shouldGetPropsList() {
-        RequestCorrelationId.create(LINK_PROPS_CORRELATION_ID);
+        final String correlationId = "non-empty-link-props";
+
+        LinkPropsData linkProps = new LinkPropsData(new NetworkEndpoint("00:00:00:00:00:00:00:01", 1),
+                new NetworkEndpoint("00:00:00:00:00:00:00:02", 2),
+                Collections.singletonMap("cost", "2"));
+        Message message = new ChunkedInfoMessage(linkProps, 0, correlationId, null);
+        messageExchanger.mockResponse(message);
+        RequestCorrelationId.create(correlationId);
+
         List<LinkPropsDto> result = linkService.getLinkProps(null, 0, null, 0);
         assertFalse("List of link props should be empty", result.isEmpty());
 
         LinkPropsDto dto = result.get(0);
-        assertThat(dto.getSrcSwitch(), is(LINK_PROPS.getSource().getSwitchDpId()));
-        assertThat(dto.getSrcPort(), is(LINK_PROPS.getSource().getPortId()));
-        assertThat(dto.getDstSwitch(), is(LINK_PROPS.getDestination().getSwitchDpId()));
-        assertThat(dto.getDstPort(), is(LINK_PROPS.getDestination().getPortId()));
+        assertThat(dto.getSrcSwitch(), is(linkProps.getSource().getSwitchDpId()));
+        assertThat(dto.getSrcPort(), is(linkProps.getSource().getPortId()));
+        assertThat(dto.getDstSwitch(), is(linkProps.getDestination().getSwitchDpId()));
+        assertThat(dto.getDstPort(), is(linkProps.getDestination().getPortId()));
     }
 
     @TestConfiguration
@@ -93,7 +101,7 @@ public class LinkServiceTest {
 
         @Bean
         public MessageExchanger messageExchanger() {
-            return new MessageExchanger(LinkServiceTest.responses);
+            return new MessageExchanger();
         }
 
         @Bean
