@@ -1,15 +1,18 @@
 @startuml
 title FLOW ping(verification) topology
 
+control kilda.stats
+control kilda.flow.status
+
 participant Time
 participant FlowFetcher
 participant Neo4j
 
-control kilda.flow.status
-control kilda.stats
-
-participant PingManager
+participant PingProducer
+participant PingRouter
 participant TimeoutManager
+participant StatsProducer
+participant FailReporter
 
 control kilda.speaker
 control kilda.ping
@@ -21,7 +24,7 @@ control SW.dest
 
 note right of FlowFetcher: must be 1\nin system
 
-Time -> FlowFetcher: periodic tick
+Time -> FlowFetcher: ping tick
 activate FlowFetcher
 FlowFetcher -> Neo4j: fetch all flow
 activate Neo4j
@@ -29,12 +32,16 @@ Neo4j -> FlowFetcher: [flows]
 deactivate Neo4j
 
 note right of FlowFetcher: for each flow
-FlowFetcher -> PingManager: flow (field grouping)
+FlowFetcher -> PingProducer: flow (field grouping)
 deactivate FlowFetcher
 
-activate PingManager
-note right of PingManager: make ping request\n(source dest)
-PingManager -> TimeoutManager: ping request
+activate PingProducer
+note right of PingProducer: make ping request\n(source dest)
+PingProducer -> PingRouter: flow+ping request
+deactivate PingProducer
+activate PingRouter
+PingRouter -> TimeoutManager: flow+ping request\n(field grouping)
+deactivate PingRouter
 
 activate TimeoutManager
 note right of TimeoutManager: scheduleTimeout for\npingId
@@ -52,26 +59,45 @@ alt normal workflow
     note right of FL: measure flow\nlatency
     FL -> kilda.ping: ping response
     deactivate FL
-    kilda.ping -> TimeoutManager: ping response
+    kilda.ping -> PingRouter: ping response
+    PingRouter -> TimeoutManager: ping response\n(field grouping)
     note right of TimeoutManager: cancel timeout
-    TimeoutManager -> PingManager: proxy\nping response
+
+    TimeoutManager -> FailReporter: flow-ok(field grouping)
+    note right of FailReporter: reset fail flag
+
+    TimeoutManager -> StatsProducer: flow+ping response
+    activate StatsProducer
+    StatsProducer -> kilda.stats: flow ping stats
+    deactivate StatsProducer
+
 else lack of capabilities
     activate FL
     note right of FL: Sw.dest is not\ncapable to catch ping
     FL -> kilda.ping: ping response\n(lack of capabilities)
     deactivate FL
-    kilda.ping -> TimeoutManager: ping response\n(lack of capabilities)
+    kilda.ping -> PingRouter: ping response\n(lack of capabilities)
+    PingRouter -> TimeoutManager: ping response\n(field grouping)
     note right of TimeoutManager: cancel timeout
-    TimeoutManager -> PingManager: ping response\n(lack of capabilities)
+    note right of TimeoutManager: log warning
+
 else timeout
-    note right of TimeoutManager: pass N time ticks
-    TimeoutManager -> PingManager: ping response\n(timeout)
+    Time -> TimeoutManager: X monotonic tick
+    Time -> TimeoutManager: X + N monotonic tick
+    note right of TimeoutManager: log error
+    TimeoutManager -> FailReporter: flow-timeout(field grouping)
+    deactivate TimeoutManager
+
+    note right of FailReporter: set fail flag
+    activate FailReporter
+
+    Time -> FailReporter: X monotonic tick
+    Time -> FailReporter: X + M monotonic tick
+
+    FailReporter -> kilda.flow.status: report flow failure
+
+    deactivate FailReporter
 end
 deactivate TimeoutManager
-
-note right of PingManager: prepare ping status
-PingManager -> kilda.flow.status: ping result
-PingManager -> kilda.stats: flow latency
-deactivate PingManager
 
 @enduml
