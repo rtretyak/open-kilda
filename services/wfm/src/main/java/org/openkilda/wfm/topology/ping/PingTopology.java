@@ -15,38 +15,38 @@
 
 package org.openkilda.wfm.topology.ping;
 
-import org.openkilda.pce.provider.Auth;
+import org.openkilda.pce.provider.PathComputerAuth;
 import org.openkilda.wfm.LaunchEnvironment;
+import org.openkilda.wfm.config.Neo4jConfig;
 import org.openkilda.wfm.error.ConfigurationException;
 import org.openkilda.wfm.error.NameCollisionException;
 import org.openkilda.wfm.topology.AbstractTopology;
-import org.openkilda.wfm.topology.ping.bolt.ComponentId;
-import org.openkilda.wfm.topology.ping.bolt.FlowManager;
-import org.openkilda.wfm.topology.ping.bolt.FlowSyncDecoder;
-import org.openkilda.wfm.topology.ping.bolt.FlowSyncObserver;
+import org.openkilda.wfm.topology.ping.bolt.FlowFetcher;
 import org.openkilda.wfm.topology.ping.bolt.MonotonicTick;
-import org.openkilda.wfm.topology.ping.bolt.PingTick;
+import org.openkilda.wfm.topology.ping.bolt.PingManager;
 
 import org.apache.storm.generated.StormTopology;
-import org.apache.storm.kafka.spout.KafkaSpout;
 import org.apache.storm.topology.TopologyBuilder;
+import org.apache.storm.tuple.Fields;
 
-public class PingTopology extends AbstractTopology {
-    public static final String TOPOLOGY_ID = "flow_ping";
-
+public class PingTopology extends AbstractTopology<PingTopologyConfig> {
     protected PingTopology(LaunchEnvironment env) throws ConfigurationException {
-        super(env);
+        super(env, PingTopologyConfig.class);
     }
 
     @Override
     public StormTopology createTopology() throws NameCollisionException {
         TopologyBuilder topology = new TopologyBuilder();
 
-        attachFlowSync(topology);
+        monotonicTick(topology);
+        flowFetcher(topology);
+        pingManager(topology);
+
+//        attachFlowSync(topology);
 //        attachFloodlightInput(topology);
 //
 //        attachPingTick(topology);
-//        attachMonotonicTick(topology);
+//        monotonicTick(topology);
 //
 //        attachFlowSyncDecoder(topology);
 //        topology.setBolt(FloodlightDecoder.BOLT_ID, new FloodlightDecoder());
@@ -60,43 +60,51 @@ public class PingTopology extends AbstractTopology {
         return topology.createTopology();
     }
 
-    private void attachFlowSync(TopologyBuilder topology) {
-        String spoutId = ComponentId.FLOW_SYNC_IN.toString();
-        KafkaSpout<String, String> spout = createKafkaSpout(config.getKafkaFlowSyncTopic(), spoutId);
-        topology.setSpout(spoutId, spout);
+//    private void attachFloodlightInput(TopologyBuilder topology) {
+//        String spoutId = ComponentId.FLOODLIGHT_IN.toString();
+//        KafkaSpout<String, String> spout = createKafkaSpout(config.getKafkaSpeakerTopic(), spoutId);
+//        topology.setSpout(spoutId, spout);
+//    }
+
+    private void monotonicTick(TopologyBuilder topology) {
+        topology.setBolt(MonotonicTick.BOLT_ID, new MonotonicTick(topologyConfig.getPingInterval()));
     }
 
-    private void attachFloodlightInput(TopologyBuilder topology) {
-        String spoutId = ComponentId.FLOODLIGHT_IN.toString();
-        KafkaSpout<String, String> spout = createKafkaSpout(config.getKafkaSpeakerTopic(), spoutId);
-        topology.setSpout(spoutId, spout);
+    private void flowFetcher(TopologyBuilder topology) {
+        Neo4jConfig neo4jConfig = configurationProvider.getConfiguration(Neo4jConfig.class);
+        PathComputerAuth auth = new PathComputerAuth(neo4jConfig.getHost(),
+                neo4jConfig.getLogin(), neo4jConfig.getPassword());
+
+        FlowFetcher bolt = new FlowFetcher(auth);
+        topology.setBolt(FlowFetcher.BOLT_ID, bolt)
+                .allGrouping(MonotonicTick.BOLT_ID, MonotonicTick.STREAM_PING_ID);
     }
 
-    private void attachPingTick(TopologyBuilder topology) {
-        topology.setBolt(PingTick.BOLT_ID, new PingTick(getConfig().getFlowPingInterval()));
+    private void pingManager(TopologyBuilder topology) {
+        PingManager bolt = new PingManager();
+        topology.setBolt(PingManager.BOLT_ID, bolt)
+            .fieldsGrouping(FlowFetcher.BOLT_ID, new Fields(FlowFetcher.FIELD_ID_FLOW_ID));
     }
 
-    private void attachMonotonicTick(TopologyBuilder topology) {
-        topology.setBolt(MonotonicTick.BOLT_ID, new MonotonicTick());
-    }
-
-    private void attachFlowSyncDecoder(TopologyBuilder topology) {
-        topology.setBolt(FlowSyncDecoder.BOLT_ID, new FlowSyncDecoder());
-    }
-
-    private void attachFlowUpdateObserver(TopologyBuilder topology) {
-        Auth pceAuth = config.getPathComputerAuth();
-        topology.setBolt(FlowSyncObserver.BOLT_ID, new FlowSyncObserver(pceAuth))
-                .allGrouping(MonotonicTick.BOLT_ID);
-    }
-
-    private void attachFlowKeeper(TopologyBuilder topology) {
-        topology.setBolt(FlowManager.BOLT_ID, new FlowManager())
-                .allGrouping(PingTick.BOLT_ID);
-    }
-
-    @Override
-    public String makeTopologyName() {
-        return TOPOLOGY_ID;
+//    private void attachFlowSyncDecoder(TopologyBuilder topology) {
+//        topology.setBolt(FlowSyncDecoder.BOLT_ID, new FlowSyncDecoder());
+//    }
+//
+//    private void attachFlowUpdateObserver(TopologyBuilder topology) {
+//        Auth pceAuth = config.getPathComputerAuth();
+//        topology.setBolt(FlowSyncObserver.BOLT_ID, new FlowSyncObserver(pceAuth))
+//                .allGrouping(MonotonicTick.BOLT_ID);
+//    }
+//
+    /**
+     * Topology entry point.
+     */
+    public static void main(String[] args) {
+        try {
+            LaunchEnvironment env = new LaunchEnvironment(args);
+            (new PingTopology(env)).setup();
+        } catch (Exception e) {
+            System.exit(handleLaunchException(e));
+        }
     }
 }

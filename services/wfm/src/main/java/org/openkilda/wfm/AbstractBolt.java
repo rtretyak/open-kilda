@@ -16,6 +16,7 @@
 package org.openkilda.wfm;
 
 import org.openkilda.wfm.error.AbstractException;
+import org.openkilda.wfm.error.PipelineException;
 
 import lombok.extern.log4j.Log4j2;
 import org.apache.storm.task.OutputCollector;
@@ -27,6 +28,8 @@ import java.util.Map;
 
 @Log4j2
 public abstract class AbstractBolt extends BaseRichBolt {
+    public static final String FIELD_ID_CONTEXT = "context";
+
     private OutputCollector output;
 
     @Override
@@ -51,6 +54,21 @@ public abstract class AbstractBolt extends BaseRichBolt {
     @Override
     public void prepare(Map stormConf, TopologyContext context, OutputCollector collector) {
         this.output = collector;
+    }
+
+    protected CommandContext getContext(Tuple input) throws PipelineException {
+        final CommandContext context;
+        try {
+            Object raw = input.getValueByField(FIELD_ID_CONTEXT);
+            if (raw instanceof String) {
+                context = new CommandContext((String) raw);
+            } else {
+                context = (CommandContext) raw;
+            }
+        } catch (ClassCastException e) {
+            throw new PipelineException(this, input, FIELD_ID_CONTEXT, e.toString());
+        }
+        return context;
     }
 
     protected OutputCollector getOutput() {

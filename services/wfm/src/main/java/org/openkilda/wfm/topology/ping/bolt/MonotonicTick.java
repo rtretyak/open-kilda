@@ -15,11 +15,56 @@
 
 package org.openkilda.wfm.topology.ping.bolt;
 
-public class MonotonicTick extends AbstractTick {
-    public static final String BOLT_ID = "monotonic.tick";
+import org.openkilda.wfm.CommandContext;
+import org.openkilda.wfm.share.bolt.AbstractTick;
 
-    public MonotonicTick() {
-        // TODO(surabujin): switch on subsecond frequency
+import org.apache.storm.topology.OutputFieldsDeclarer;
+import org.apache.storm.tuple.Fields;
+import org.apache.storm.tuple.Tuple;
+import org.apache.storm.tuple.Values;
+
+public class MonotonicTick extends AbstractTick {
+    public static final String BOLT_ID = ComponentId.MONOTONIC_TICK.toString();
+
+    public static final String FIELD_ID_TICK = "tick";
+
+    public static final String STREAM_PING_ID = "ping.tick";
+    public static final Fields STREAM_PING_FIELDS = new Fields(FIELD_ID_TICK, FIELD_ID_CONTEXT);
+
+    private final int pingInterval;
+    private int pingSequenceIndex = 0;
+
+    public MonotonicTick(int pingInterval) {
+        // TODO(surabujin): switch to subsecond frequency
         super(1);
+
+        this.pingInterval = pingInterval;
+        if (this.pingInterval < 1) {
+            throw new IllegalArgumentException("");
+        }
+    }
+
+    @Override
+    protected void produceTick(Tuple input) {
+        super.produceTick(input);
+
+        pingTick(input);
+    }
+
+    private void pingTick(Tuple input) {
+        if (pingSequenceIndex++ < pingInterval) {
+            return;
+        }
+
+        pingSequenceIndex = 0;
+
+        Values payload = new Values(input.getValue(0), new CommandContext());
+        getOutput().emit(STREAM_PING_ID, input, payload);
+    }
+
+    @Override
+    public void declareOutputFields(OutputFieldsDeclarer outputManager) {
+        super.declareOutputFields(outputManager);
+        outputManager.declareStream(STREAM_PING_ID, STREAM_PING_FIELDS);
     }
 }

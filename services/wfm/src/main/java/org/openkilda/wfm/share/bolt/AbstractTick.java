@@ -13,7 +13,7 @@
  *   limitations under the License.
  */
 
-package org.openkilda.wfm.topology.ping.bolt;
+package org.openkilda.wfm.share.bolt;
 
 import org.openkilda.wfm.AbstractBolt;
 

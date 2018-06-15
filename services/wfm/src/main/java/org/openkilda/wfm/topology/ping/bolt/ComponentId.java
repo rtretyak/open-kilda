@@ -16,22 +16,18 @@
 package org.openkilda.wfm.topology.ping.bolt;
 
 public enum ComponentId {
-    FLOW_SYNC_IN("flow_sync.in"),
-    FLOODLIGHT_IN("floodlight.kafka.in"),
+    MONOTONIC_TICK("monotonic.tick"),
+
+    FLOW_FETCHER("flow_fetcher"),
+    PING_MANAGER("ping_manager"),
 
     FLODDLIGHT_DECODER("floodlight.decoder"),
     FLOODLIGHT_ENCODER("floodlight.encoder"),
 
-    FLOW_SYNC_DECODER("flow_sync.decoder"),
-    FLOW_SYNC_ENCODER("flow_sync.encoder"),
-    FLOW_SYNC_OBSERVER("flow_sync_observer"),
-    FLOW_ROUTER("flow.router"),
-    FLOW_MANAGER("flow_manager"),
-
-    PING_ROUTER("ping.router"),
-    PING_MANAGER("ping_manager"),
+    FLOODLIGHT_IN("floodlight.kafka.in"),
 
     FLOW_SYNC_OUT("flow_sync.out"),
+    FLOW_STATS_OUT("flow_stats.out"),
     FLOODLIGHT_OUT("floodlight.kafka.out");
 
     private final String value;

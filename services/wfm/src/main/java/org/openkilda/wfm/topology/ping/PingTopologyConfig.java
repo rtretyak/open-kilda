@@ -13,8 +13,27 @@
  *   limitations under the License.
  */
 
-package org.openkilda.wfm.topology.ping.bolt;
+package org.openkilda.wfm.topology.ping;
 
-public class PingRouter extends PingRouter {
-    public static final String BOLT_ID = ComponentId.PING_ROUTER.toString();
+import org.openkilda.wfm.topology.AbstractTopologyConfig;
+
+import com.sabre.oss.conf4j.annotation.Configuration;
+import com.sabre.oss.conf4j.annotation.IgnoreKey;
+import com.sabre.oss.conf4j.annotation.Key;
+
+@Configuration
+public interface PingTopologyConfig extends AbstractTopologyConfig {
+    @IgnoreKey
+    PingConfig getPingConfig();
+
+    default int getPingInterval() {
+        return getPingConfig().getPingInterval();
+    }
+
+    @Configuration
+    @Key("flow.ping")
+    interface PingConfig {
+        @Key("interval")
+        int getPingInterval();
+    }
 }
