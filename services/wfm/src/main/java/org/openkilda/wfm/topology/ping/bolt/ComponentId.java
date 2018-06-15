@@ -19,7 +19,7 @@ public enum ComponentId {
     MONOTONIC_TICK("monotonic.tick"),
 
     FLOW_FETCHER("flow_fetcher"),
-    PING_MANAGER("ping_manager"),
+    PING_PRODUCER("ping_producer"),
 
     FLODDLIGHT_DECODER("floodlight.decoder"),
     FLOODLIGHT_ENCODER("floodlight.encoder"),

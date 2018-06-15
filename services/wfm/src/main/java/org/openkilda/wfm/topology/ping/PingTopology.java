@@ -23,7 +23,7 @@ import org.openkilda.wfm.error.NameCollisionException;
 import org.openkilda.wfm.topology.AbstractTopology;
 import org.openkilda.wfm.topology.ping.bolt.FlowFetcher;
 import org.openkilda.wfm.topology.ping.bolt.MonotonicTick;
-import org.openkilda.wfm.topology.ping.bolt.PingManager;
+import org.openkilda.wfm.topology.ping.bolt.PingProducer;
 
 import org.apache.storm.generated.StormTopology;
 import org.apache.storm.topology.TopologyBuilder;
@@ -38,9 +38,11 @@ public class PingTopology extends AbstractTopology<PingTopologyConfig> {
     public StormTopology createTopology() throws NameCollisionException {
         TopologyBuilder topology = new TopologyBuilder();
 
+        // TODO: cancel error reporting for removed flows
+
         monotonicTick(topology);
         flowFetcher(topology);
-        pingManager(topology);
+        pingProducer(topology);
 
 //        attachFlowSync(topology);
 //        attachFloodlightInput(topology);
@@ -52,7 +54,7 @@ public class PingTopology extends AbstractTopology<PingTopologyConfig> {
 //        topology.setBolt(FloodlightDecoder.BOLT_ID, new FloodlightDecoder());
 //        attachFlowUpdateObserver(topology);
 //        attachFlowKeeper(topology);
-//        topology.setBolt(PingManager.BOLT_ID, new PingManager());
+//        topology.setBolt(PingProducer.BOLT_ID, new PingProducer());
 //        topology.setBolt(RequestProducer.BOLT_ID, new RequestProducer());
 //        topology.setBolt(ResponseConsumer.BOLT_ID, new ResponseConsumer());
 //        topology.setBolt(FloodlightEncoder.BOLT_ID, new FloodlightEncoder());
@@ -80,9 +82,9 @@ public class PingTopology extends AbstractTopology<PingTopologyConfig> {
                 .allGrouping(MonotonicTick.BOLT_ID, MonotonicTick.STREAM_PING_ID);
     }
 
-    private void pingManager(TopologyBuilder topology) {
-        PingManager bolt = new PingManager();
-        topology.setBolt(PingManager.BOLT_ID, bolt)
+    private void pingProducer(TopologyBuilder topology) {
+        PingProducer bolt = new PingProducer();
+        topology.setBolt(PingProducer.BOLT_ID, bolt)
             .fieldsGrouping(FlowFetcher.BOLT_ID, new Fields(FlowFetcher.FIELD_ID_FLOW_ID));
     }
 
