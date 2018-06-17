@@ -54,7 +54,6 @@ public class PingTopology extends AbstractTopology<PingTopologyConfig> {
 //        topology.setBolt(FloodlightDecoder.BOLT_ID, new FloodlightDecoder());
 //        attachFlowUpdateObserver(topology);
 //        attachFlowKeeper(topology);
-//        topology.setBolt(PingProducer.BOLT_ID, new PingProducer());
 //        topology.setBolt(RequestProducer.BOLT_ID, new RequestProducer());
 //        topology.setBolt(ResponseConsumer.BOLT_ID, new ResponseConsumer());
 //        topology.setBolt(FloodlightEncoder.BOLT_ID, new FloodlightEncoder());
@@ -79,7 +78,7 @@ public class PingTopology extends AbstractTopology<PingTopologyConfig> {
 
         FlowFetcher bolt = new FlowFetcher(auth);
         topology.setBolt(FlowFetcher.BOLT_ID, bolt)
-                .allGrouping(MonotonicTick.BOLT_ID, MonotonicTick.STREAM_PING_ID);
+                .shuffleGrouping(MonotonicTick.BOLT_ID, MonotonicTick.STREAM_PING_ID);
     }
 
     private void pingProducer(TopologyBuilder topology) {
